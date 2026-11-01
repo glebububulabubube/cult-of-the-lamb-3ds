@@ -19,14 +19,11 @@ all: $(TARGET).cia
 $(TARGET).elf: $(OBJ)
 	$(CXX) $(LDFLAGS) $(OBJ) -L$(CTRULIB)/lib $(LIBS) -o $@
 
-$(TARGET).smdh: $(TARGET).elf
-	smdhtool --create "CultLamb" "Cult of the Lamb demo" "Homebrew" icon.png $@
-
-$(TARGET).cia: $(TARGET).elf $(TARGET).smdh
-	makerom -f cia -o $@ -elf $(TARGET).elf -smdh $(TARGET).smdh -target t
+$(TARGET).cia: $(TARGET).elf
+	makerom -f cia -o $@ -elf $(TARGET).elf -rsf $(CURDIR)/cotl-3ds.rsf -target t
 
 main.o: $(SOURCES)/main.cpp
 	$(CXX) -c $(CXXFLAGS) $< -o $@
 
 clean:
-	rm -f *.o *.elf *.smdh *.cia
+	rm -f *.o *.elf *.cia
