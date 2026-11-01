@@ -1,0 +1,38 @@
+name: Build CultLamb
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkitarm
+    env:
+      DEVKITPRO: /opt/devkitpro
+      DEVKITARM: /opt/devkitpro/devkitARM
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install makerom
+        run: |
+          cd /tmp
+          curl -sSL -o makerom.zip https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.18.4/makerom-v0.18.4-ubuntu_x86_64.zip
+          unzip -o makerom.zip >/dev/null
+          mkdir -p /usr/local/bin
+          cp makerom /usr/local/bin/
+          chmod +x /usr/local/bin/makerom
+
+      - name: Build
+        run: make
+
+      - name: Upload CIA
+        uses: actions/upload-artifact@v4
+        with:
+          name: cotl-3ds-cia
+          path: |
+            cotl-3ds.cia
+            cotl-3ds.3dsx
+            cotl-3ds.elf
+          if-no-files-found: error
