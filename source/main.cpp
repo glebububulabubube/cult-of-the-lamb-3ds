@@ -81,27 +81,23 @@ static void update(float dt){
 }
 
 static C3D_RenderTarget *top;
-static u32 bg, foodC, foodLid, fol1, fol2, ene, lambBase, lambBody, lambHead, lambEye, lambHorn;
+static u32 bg, foodC, foodLid, fol1, fol2, ene, lambBase, lambBody, lambHead, lambEye, lambHorn, txt;
 
 static void drawTop(void){
     C2D_SceneBegin(top);
     C2D_DrawRectSolid(0,0,0,SCR_W,SCR_H,bg);
-    // еда
     for(int i=0;i<fcount;i++){
         if(ftake[i]) continue;
         C2D_DrawRectSolid(fx[i]-8,fy[i]-6,0.2f,16,14,foodC);
         C2D_DrawRectSolid(fx[i]-8,fy[i]-6,0.21f,16,5,foodLid);
     }
-    // последователи
     for(int i=0;i<ocount;i++){
         C2D_DrawCircleSolid(ox[i],oy[i],0.3f,8,fol1);
         C2D_DrawCircleSolid(ox[i],oy[i]-7,0.29f,4,fol2);
     }
-    // враги (прямоугольники вместо треугольников — надёжнее)
     for(int i=0;i<ecount;i++){
         C2D_DrawRectSolid(ex[i]-8,ey[i]-6,0.4f,16,12,ene);
     }
-    // игрок — ягнёнок простыми кругами и квадратами
     C2D_DrawCircleSolid(px,py+6,0.5f,16,lambBase);
     C2D_DrawRectSolid(px-8,py-8,0.4f,16,14,lambBody);
     C2D_DrawCircleSolid(px,py-2,0.5f,10,lambHead);
@@ -110,16 +106,14 @@ static void drawTop(void){
     C2D_DrawRectSolid(px-10,py-12,0.5f,3,6,lambHorn);
     C2D_DrawRectSolid(px+7,py-12,0.5f,3,6,lambHorn);
     if(dmgFlash>0) C2D_DrawRectSolid(0,0,0.9f,SCR_W,SCR_H,C2D_Color32(255,0,0,60));
+    // верхняя строка-счёт рисуем квадратами-индикаторами
+    C2D_DrawRectSolid(8,8,0.5f,10,10,C(1,0.9f,0.4f));
+    C2D_DrawRectSolid(8,22,0.5f,10,10,C(0.2f,0.9f,0.2f));
+    C2D_Flush();
 }
 
 static void drawBottom(void){
-    consoleSelect(NULL);
-    printf("\x1b[1;8HCULT LAMB DEMO");
-    printf("\x1b[3;1HFolowers: %d", ocount);
-    printf("\x1b[4;1HFood:    %d", score);
-    printf("\x1b[5;1HHP:      %d/%d", (int)php,(int)pmaxhp);
-    printf("\x1b[6;1HDay %d  time %d", day,(int)timer);
-    printf("\x1b[9;1H A: pray  START: quit");
+    // Ничего не рисуем для надёжности (без console/printf)
 }
 
 int main(void){
@@ -130,7 +124,6 @@ int main(void){
     C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
     C2D_Init(C2D_DEFAULT_MAX_OBJECTS);
     C2D_Prepare();
-    consoleInit(GFX_BOTTOM, NULL);
     top = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
 
     bg     = C(0.16f,0.11f,0.08f);
@@ -144,6 +137,7 @@ int main(void){
     lambHead= C(0.92f,0.92f,0.92f);
     lambEye = C(0.0f,0.0f,0.0f);
     lambHorn= C(0.60f,0.0f,0.10f);
+    txt     = C(1,1,1);
 
     initLevel();
 
