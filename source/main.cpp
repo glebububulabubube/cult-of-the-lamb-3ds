@@ -1,7 +1,5 @@
 /*
  * КУЛЬТ ЯГНЁНКА — демейк для Nintendo 3DS
- * Собственная игра в духе Cult of the Lamb.
- * Только базовые примитивы citro2d (Rect/Circle).
  */
 #include <3ds.h>
 #include <citro2d.h>
@@ -26,6 +24,7 @@ static float ex[MAX_ENEMIES],ey[MAX_ENEMIES],es[MAX_ENEMIES],ed[MAX_ENEMIES],ecd
 static float ox[MAX_FOLLOWERS],oy[MAX_FOLLOWERS],ot[MAX_FOLLOWERS]; static int ocount;
 static int day=1, score=0;
 static float timer=90.0f, dmgFlash=0.0f, lastSpawn=0.0f;
+static bool running=true;
 
 static float rnd(float a,float b){ return a + (float)rand()/(float)RAND_MAX*(b-a); }
 
@@ -91,8 +90,8 @@ static void update(float dt){
 static void drawLamb(float x,float y){
     C2D_DrawCircleSolid(x,y+6,0.5f,16, RGBAf(1,1,1,0.85f));
     C2D_DrawCircleSolid(x,y+6,0.51f,16, RGBAf(0.7f,0.1f,0.1f,1.0f));
-    C2D_DrawTriangle(x, y-4,0.6f, x-16, y+16,0.1f, x+16, y+16,0.1f, RGBAf(0.82f,0,0.13f,1));
-    C2D_DrawTriangle(x, y+12,0.59f, x-15, y+16,0.1f, x+15, y+16,0.1f, RGBAf(0.9f,0.9f,0.9f,1));
+    C2D_DrawTriangle(x, y-4, RGBAf(0.82f,0,0.13f,1), x-16, y+16, RGBAf(0.82f,0,0.13f,1), x+16, y+16, RGBAf(0.82f,0,0.13f,1), 0.6f);
+    C2D_DrawTriangle(x, y+12, RGBAf(0.9f,0.9f,0.9f,1), x-15, y+16, RGBAf(0.9f,0.9f,0.9f,1), x+15, y+16, RGBAf(0.9f,0.9f,0.9f,1), 0.59f);
     C2D_DrawCircleSolid(x, y-6,0.5f,15, RGBAf(0.7f,0.7f,0.7f,1));
     C2D_DrawCircleSolid(x, y-6,0.49f,11, RGBAf(0.92f,0.92f,0.92f,1));
     C2D_DrawCircleSolid(x-6, y-7,0.55f,3, RGBAf(0,0,0,1));
@@ -103,9 +102,7 @@ static void drawLamb(float x,float y){
 }
 
 static C3D_RenderTarget *top;
-static void initTop(void){
-    top = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
-}
+
 static void drawTop(void){
     C2D_SceneBegin(top);
     C2D_DrawRectSolid(0,0,0,SCR_W,SCR_H, RGBAf(0.16f,0.11f,0.08f,1.0f));
@@ -121,10 +118,11 @@ static void drawTop(void){
         C2D_DrawCircleSolid(ox[i],oy[i]-7,0.29f,4, RGBAf(0.6f,0.6f,0.6f,1));
     }
     for(int i=0;i<ecount;i++){
-        C2D_DrawTriangle(ex[i]+10,ey[i],0.4f, ex[i]-6,ey[i]-7,0.4f, ex[i]-6,ey[i]+7,0.4f, RGBAf(0.75f,0.2f,0.3f,1));
+        C2D_DrawTriangle(ex[i]+10,ey[i], RGBAf(0.75f,0.2f,0.3f,1), ex[i]-6,ey[i]-7, RGBAf(0.75f,0.2f,0.3f,1), ex[i]-6,ey[i]+7, RGBAf(0.75f,0.2f,0.3f,1), 0.4f);
     }
     drawLamb(px,py);
     if(dmgFlash>0) C2D_DrawRectSolid(0,0,0.9f,SCR_W,SCR_H, RGBAf(1,0,0,0.2f));
+    C2D_Flush();
 }
 
 static void drawBottom(void){
@@ -146,7 +144,7 @@ int main(void){
     C2D_Init(C2D_DEFAULT_MAX_OBJECTS);
     C2D_Prepare();
     consoleInit(GFX_BOTTOM, NULL);
-    initTop();
+    top = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
     initLevel();
     while(aptMainLoop()){
         hidScanInput();
