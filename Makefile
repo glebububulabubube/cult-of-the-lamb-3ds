@@ -13,17 +13,21 @@ LDFLAGS := -specs=3dsx.specs -g $(ARCH)
 LIBS := -lcitro2d -lcitro3d -lctru -lm
 
 OBJ := main.o
+SMDH := $(TARGET).smdh
 
-all: $(TARGET).cia
+all: $(TARGET).3dsx
 
 $(TARGET).elf: $(OBJ)
 	$(CXX) $(LDFLAGS) $(OBJ) -L$(CTRULIB)/lib $(LIBS) -o $@
 
-$(TARGET).cia: $(TARGET).elf
-	makerom -f cia -o $@ -elf $(TARGET).elf -rsf $(CURDIR)/cotl-3ds.rsf -target t
+$(TARGET).smdh: $(TARGET).elf
+	smdhtool --create "CultLamb" "Cult of the Lamb demo" "Homebrew" icon.png $@
+
+$(TARGET).3dsx: $(TARGET).elf $(TARGET).smdh
+	3dsxtool $(TARGET).elf $(TARGET).3dsx --smdh=$(TARGET).smdh
 
 main.o: $(SOURCES)/main.cpp
 	$(CXX) -c $(CXXFLAGS) $< -o $@
 
 clean:
-	rm -f *.o *.elf *.cia
+	rm -f *.o *.elf *.smdh *.3dsx *.cia
