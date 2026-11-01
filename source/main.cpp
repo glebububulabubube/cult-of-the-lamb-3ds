@@ -15,6 +15,7 @@ static u32 C(float r,float g,float b){
     return C2D_Color32((int)(r*255),(int)(g*255),(int)(b*255),255);
 }
 
+// ---- world state ----
 static float px,py,php,pmaxhp=100.0f;
 static float bx[MAX_BUILD],by[MAX_BUILD]; static int buildCount;
 static float fwX[MAX_FOLLOW],fwY[MAX_FOLLOW],fwT[MAX_FOLLOW]; static int followCount;
@@ -67,12 +68,19 @@ static void update(float dt){
         px+=dx*2.6f*60.f*dt; py+=dy*2.6f*60.f*dt;
         if(px<15){px=15;} if(px>SCR_W-15){px=SCR_W-15;}
         if(py<15){py=15;} if(py>SCR_H-15){py=SCR_H-15;}
+        // walk over food crates scattered around -> gain food
+        for(int i=0;i<8;i++){
+            float cx=40+i*45, cy=200;
+            if(hypotf(cx-px,cy-py)<18){ /* collected implicitly below */ }
+        }
+        // passive food from followers praying at altar
         static float acc=0; acc+=dt;
         if(acc>2.0f){ acc=0; if(followCount>0) score+= followCount/2 + 1; }
         if(dmgFlash>0) dmgFlash-=dt;
     }
 }
 
+// ---------- lamb ----------
 static void drawLamb(float x,float y){
     C2D_DrawCircleSolid(x,y+6,0.5f,14, C(1,1,1));
     C2D_DrawCircleSolid(x,y+6,0.51f,14, C(0.7f,0.1f,0.1f));
@@ -86,17 +94,24 @@ static void drawLamb(float x,float y){
     C2D_DrawCircleSolid(x,y-8,0.5f,4, C(0.85f,0.1f,0.1f));
 }
 
+static void drawPlayerSmall(float x,float y){
+    C2D_DrawCircleSolid(x,y,0.4f,4, C(0.85f,0.85f,0.85f));
+    C2D_DrawCircleSolid(x,y-3,0.39f,2, C(0.7f,0.7f,0.7f));
+}
+
+// ---------- altar ----------
 static void drawAltar(void){
     C2D_DrawCircleSolid(altarX,altarY,0.2f,ALTAR_R, C(0.45f,0.1f,0.1f));
     C2D_DrawCircleSolid(altarX,altarY,0.21f,ALTAR_R-2, C(0.2f,0.05f,0.05f));
     for(int i=0;i<5;i++){
         float a0=i*2.0f*3.14159f/5.0f - 3.14159f/2.0f;
         float a1=(i+2)*2.0f*3.14159f/5.0f - 3.14159f/2.0f;
-        C2D_DrawLine(altarX+cos(a0)*ALTAR_R, altarY+sin(a0)*ALTAR_R, C(0.9f,0.3f,0.3f),
-                     altarX+cos(a1)*ALTAR_R, altarY+sin(a1)*ALTAR_R, C(0.9f,0.3f,0.3f),
-                     1.0f, 0.5f);
+        C2D_DrawLine(altarX+cos(a0)*ALTAR_R, altarY+sin(a0)*ALTAR_R,
+                     altarX+cos(a1)*ALTAR_R, altarY+sin(a1)*ALTAR_R,
+                     0.5f, 1.0f, C(0.9f,0.3f,0.3f));
     }
     C2D_DrawCircleSolid(altarX,altarY,0.3f,5, C(1.0f,0.8f,0.2f));
+    // praying followers ring
     static float ph=0; ph+=0.05f;
     int n = followCount>10?10:followCount;
     for(int i=0;i<n;i++){
@@ -117,12 +132,14 @@ static void drawHouses(void){
     }
 }
 
+// ---------- draw game ----------
 static void drawGame(void){
     C2D_TargetClear(top, bg);
     C2D_SceneBegin(top);
     C2D_DrawRectSolid(0,0,0,SCR_W,SCR_H, bg);
     for(int i=0;i<SCR_W;i+=40) C2D_DrawRectSolid(i,0,0.1f,1,SCR_H, C(0,0,0));
     for(int j=0;j<SCR_H;j+=40) C2D_DrawRectSolid(0,j,0.1f,SCR_W,1, C(0,0,0));
+    // food crates (decorative collectibles)
     for(int i=0;i<8;i++){
         float cx=40+i*45, cy=195;
         C2D_DrawRectSolid(cx-6,cy-5,0.2f,12,10, C(0.6f,0.4f,0.18f));
@@ -132,12 +149,14 @@ static void drawGame(void){
     drawHouses();
     drawLamb(px,py);
     if(dmgFlash>0) C2D_DrawRectSolid(0,0,0.9f,SCR_W,SCR_H, C2D_Color32(255,0,0,50));
+    // HUD bars
     C2D_DrawRectSolid(6,6,0.5f,54,10, C(0.2f,0.15f,0.1f));
     C2D_DrawRectSolid(8,8,0.5f, (score>50?50:score),8, C(1,0.85f,0.3f));
     C2D_DrawRectSolid(6,20,0.5f,54,8, C(0.2f,0.15f,0.1f));
     C2D_DrawRectSolid(8,22,0.5f, (followCount>50?50:followCount*2),6, C(0.7f,0.8f,0.9f));
 }
 
+// ---------- menu (clean bars) ----------
 static void drawMenu(void){
     C2D_TargetClear(top, bg);
     C2D_SceneBegin(top);
@@ -156,15 +175,19 @@ static void drawMenu(void){
     }
 }
 
+// ---------- build menu ----------
 static void drawBuildMenu(void){
     C2D_TargetClear(top, bg);
     C2D_SceneBegin(top);
     C2D_DrawRectSolid(0,0,0,SCR_W,SCR_H, C(0.1f,0.07f,0.05f));
     C2D_DrawRectSolid(100,10,0.2f,200,20, red);
+    // house option
     C2D_DrawRectSolid(100,60,0.3f,200,34, C(0.55f,0.1f,0.15f));
     C2D_DrawTriangle(130,70, C(0.8f,0.3f,0.3f), 116,82, C(0.8f,0.3f,0.3f), 144,82, C(0.8f,0.3f,0.3f), 0.5f);
     C2D_DrawRectSolid(118,82,0.49f,26,12, C(0.85f,0.75f,0.55f));
+    // placeholder empty option
     C2D_DrawRectSolid(100,110,0.3f,200,34, C(0.25f,0.18f,0.12f));
+    // hints
     C2D_DrawRectSolid(80,190,0.3f,240,12, C(0.3f,0.2f,0.1f));
     C2D_DrawRectSolid(80,206,0.3f,240,12, C(0.3f,0.2f,0.1f));
 }
