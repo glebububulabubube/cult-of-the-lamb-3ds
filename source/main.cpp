@@ -124,7 +124,7 @@ static void drawLamb(float x,float y){
 }
 
 static void drawTop(void){
-    C2D_Target *top = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
+    C3D_RenderTarget *top = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
     C2D_SceneBegin(top);
     // фон
     C2D_DrawRectSolid(0,0,0,SCR_W,SCR_H, RGBAf(0.16f,0.11f,0.08f,1.0f));
@@ -190,7 +190,7 @@ int main(void){
 
         C2D_Flush();
         gspWaitForEvent(GSPGPU_EVENT_VBlank0, false);
-        C2D_SwapBuffers();
+        C3D_SwapBuffers();
     }
 
     C2D_Fini();
