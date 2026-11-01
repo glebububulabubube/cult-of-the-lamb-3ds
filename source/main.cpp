@@ -56,7 +56,7 @@ static void update(float dt){
 }
 
 static C3D_RenderTarget *top;
-static u32 bg, red, cream, select, foodC, foodLid, fol1, fol2;
+static u32 bg, red, cream, selc, foodC, foodLid, fol1, fol2;
 
 static void drawLamb(float x,float y){
     C2D_DrawCircleSolid(x,y+6,0.5f,16, C(1,1,1));
@@ -76,14 +76,13 @@ static void drawMenu(void){
     C2D_DrawRectSolid(0,0,0,SCR_W,SCR_H, bg);
     C2D_DrawRectSolid(70,20,0.2f,260,20, red);
     C2D_DrawRectSolid(75,25,0.21f,250,10, cream);
-    const char* items[4] = {"НАЧАТЬ ИГРУ","НАСТРОЙКИ","АВТОРЫ","ВЫХОД"};
     int y=70;
     for(int i=0;i<4;i++){
         int cy=y + i*34;
         if(i==menuSel) C2D_DrawRectSolid(70,cy-6,0.3f,260,22, C(0.3f,0.2f,0.1f));
-        C2D_DrawRectSolid(90,cy,0.4f,20,6, select);
-        C2D_DrawRectSolid(118,cy,0.4f,10,6, select);
-        C2D_DrawRectSolid(134,cy,0.4f,24,6, select);
+        C2D_DrawRectSolid(90,cy,0.4f,20,6, selc);
+        C2D_DrawRectSolid(118,cy,0.4f,10,6, selc);
+        C2D_DrawRectSolid(134,cy,0.4f,24,6, selc);
     }
     C2D_DrawRectSolid(90,175,0.3f,220,2, C(0.5f,0.4f,0.3f));
     C2D_DrawRectSolid(90,185,0.3f,120,2, C(0.5f,0.4f,0.3f));
@@ -134,7 +133,7 @@ int main(void){
     bg = C(0.16f,0.11f,0.08f);
     red = C(0.82f,0.0f,0.13f);
     cream = C(0.95f,0.9f,0.8f);
-    select = C(1.0f,0.85f,0.3f);
+    selc = C(1.0f,0.85f,0.3f);
     foodC = C(0.54f,0.36f,0.17f);
     foodLid = C(0.42f,0.25f,0.10f);
     fol1 = C(0.86f,0.86f,0.86f);
