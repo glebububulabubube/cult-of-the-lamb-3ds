@@ -5,7 +5,6 @@
 #include <math.h>
 #include <string.h>
 #include <time.h>
-#include "lamb_tex.h"
 
 #define SCR_W 400
 #define SCR_H 240
@@ -13,7 +12,7 @@
 #define BOT_H 240
 #define WORLD_W 900
 #define WORLD_H 520
-#define MAX_BUILD 16
+#define MAX_BUILD 32
 #define MAX_FOLLOW 24
 #define ALTAR_R 16
 #define MAX_ENEMY 8
@@ -34,7 +33,9 @@ static void drawText(float x,float y,float scale,const char* s,float r,float g,f
 
 static float px,py,php,pmaxhp=100.0f;
 static float camx,camy;
-static float bx[MAX_BUILD],by[MAX_BUILD]; static int buildCount;
+// buildings: 0=house,1=toilet,2=foodkitchen(unique),3=decor
+static float bx[MAX_BUILD],by[MAX_BUILD],btype[MAX_BUILD]; static int buildCount;
+static int hasKitchen;   // unique flag
 static float fwX[MAX_FOLLOW],fwY[MAX_FOLLOW],fwT[MAX_FOLLOW],fwM[MAX_FOLLOW]; static int followCount;
 static int fwWork[MAX_FOLLOW];
 static char fwName[MAX_FOLLOW][24];
@@ -44,6 +45,7 @@ static float dmgFlash;
 static int talkTarget;
 static int talkMenuSel;
 static int talkMenuOpen;
+static int buildSel; // selected build type in bottom menu
 
 enum GameState { ST_MENU, ST_PLAY, ST_DUNGEON, ST_TALK };
 static GameState state = ST_MENU;
@@ -52,13 +54,9 @@ static float tclock;
 static bool wantExit=false;
 
 static C3D_RenderTarget *top, *bottom;
-static u32 bg, red, cream, black, white;
+static u32 bg, red, cream, black, white, grey, yellow;
 static C2D_Font sysFont;
 static C2D_TextBuf tBuf;
-
-static C3D_Tex lambTex;
-static C2D_Image lambImg;
-static Tex3DS_SubTexture lambSub;
 
 static const char* names[] = {
     "ZEB","MORK","LUG","ROK","SYN","BAR","NAT","VEX",
@@ -74,18 +72,33 @@ static void drawText(float x,float y,float scale,const char* s,float r,float g,f
     C2D_DrawText(&txt, C2D_AlignLeft, x, y, 0.3f, scale, scale, C(r,g,b));
 }
 
-static void initLambTexture(void){
-    C3D_TexInit(&lambTex, LAMB_TEX_W, LAMB_TEX_H, GPU_RGBA8);
-    C3D_TexUpload(&lambTex, lamb_tex);
-    C3D_TexFlush(&lambTex);
-    lambSub.width  = LAMB_TEX_W;
-    lambSub.height = LAMB_TEX_H;
-    lambSub.left   = 0.0f;
-    lambSub.top    = 0.0f;
-    lambSub.right  = 1.0f;
-    lambSub.bottom = 1.0f;
-    lambImg.tex    = &lambTex;
-    lambImg.subtex = &lambSub;
+static void drawLambfull(float x,float y,float sc){
+    C2D_DrawCircleSolid(x, y+22*sc, 0.6f, 9*sc, C2D_Color32(0,0,0,90));
+    C2D_DrawRectSolid(x-8*sc, y+12*sc, 0.3f, 4*sc, 9*sc, grey);
+    C2D_DrawRectSolid(x+4*sc, y+12*sc, 0.3f, 4*sc, 9*sc, grey);
+    C2D_DrawRectSolid(x-13*sc, y-6*sc, 0.4f, 26*sc, 20*sc, red);
+    for(int i=0;i<5;i++){
+        float zx=x-12*sc+i*6*sc;
+        C2D_DrawRectSolid(zx, y+13*sc, 0.41f, 5*sc, 3*sc, (i%2)? white : C(0.9f,0.9f,0.9f));
+    }
+    C2D_DrawRectSolid(x-16*sc, y-2*sc, 0.5f, 5*sc, 8*sc, grey);
+    C2D_DrawRectSolid(x+11*sc, y-2*sc, 0.5f, 5*sc, 8*sc, grey);
+    C2D_DrawCircleSolid(x, y+3*sc, 0.51f, 4*sc, yellow);
+    C2D_DrawCircleSolid(x-1*sc, y+3*sc, 0.6f, 1*sc, black);
+    C2D_DrawCircleSolid(x+1*sc, y+3*sc, 0.6f, 1*sc, black);
+    C2D_DrawCircleSolid(x, y-15*sc, 0.5f, 9*sc, grey);
+    C2D_DrawTriangle(x-11*sc, y-19*sc, C(0.6f,0.55f,0.55f), x-6*sc,y-14*sc, C(0.6f,0.55f,0.55f), x-3*sc,y-21*sc, C(0.6f,0.55f,0.55f), 0.55f);
+    C2D_DrawTriangle(x+11*sc, y-19*sc, C(0.6f,0.55f,0.55f), x+6*sc,y-14*sc, C(0.6f,0.55f,0.55f), x+3*sc,y-21*sc, C(0.6f,0.55f,0.55f), 0.55f);
+    C2D_DrawCircleSolid(x-3.5f*sc, y-16*sc, 0.55f, 2*sc, black);
+    C2D_DrawCircleSolid(x+3.5f*sc, y-16*sc, 0.55f, 2*sc, black);
+    C2D_DrawCircleSolid(x-3*sc, y-17*sc, 0.6f, 0.8f*sc, white);
+    C2D_DrawCircleSolid(x+4*sc, y-17*sc, 0.6f, 0.8f*sc, white);
+    // square crown
+    C2D_DrawRectSolid(x-8*sc, y-30*sc, 0.5f, 16*sc, 8*sc, yellow);
+    C2D_DrawRectSolid(x-8*sc, y-30*sc, 0.51f, 16*sc, 2*sc, white);
+    C2D_DrawRectSolid(x-9*sc, y-33*sc, 0.52f, 3*sc, 5*sc, black);
+    C2D_DrawRectSolid(x+6*sc, y-33*sc, 0.52f, 3*sc, 5*sc, black);
+    C2D_DrawCircleSolid(x, y-26*sc, 0.6f, 2.5f*sc, C(1,0,0));
 }
 
 static void addFollower(float x,float y,const char* nm){
@@ -102,22 +115,27 @@ static void addRandomFollower(float x,float y){
 }
 
 static void startGame(void){
-    score=10; buildCount=0; followCount=0;
+    score=10; buildCount=0; hasKitchen=0; followCount=0;
     altarX=WORLD_W/2; altarY=WORLD_H/2;
     px=altarX+40; py=altarY; php=pmaxhp; dmgFlash=0;
     addRandomFollower(altarX-40, altarY+20);
     addRandomFollower(altarX+40, altarY+10);
     addRandomFollower(altarX,     altarY+40);
     camx=px-SCR_W/2; camy=py-SCR_H/2;
-    talkTarget=-1; talkMenuOpen=0;
+    talkTarget=-1; talkMenuOpen=0; buildSel=0;
 }
 
-static void buildHouse(float x,float y){
-    if(buildCount>=MAX_BUILD) return;
-    if(score<5) return;
-    bx[buildCount]=x; by[buildCount]=y; buildCount++;
-    score-=5;
-    addRandomFollower(x+rnd(-20,20), y+20);
+// build a building of given type at world coords. returns cost success
+static int tryBuild(int type,float x,float y){
+    if(buildCount>=MAX_BUILD) return 0;
+    int cost = (type==0)?5: (type==1)?4 : (type==2)?8 : 2;
+    if(score<cost) return 0;
+    if(type==2 && hasKitchen) return 0;   // kitchen unique
+    bx[buildCount]=x; by[buildCount]=y; btype[buildCount]=type; buildCount++;
+    if(type==2) hasKitchen=1;
+    score-=cost;
+    if(type==0) addRandomFollower(x+rnd(-20,20), y+20); // house grants a follower
+    return 1;
 }
 
 static void updateCamera(void){
@@ -197,12 +215,6 @@ static void returnToCult(void){
     talkMenuOpen=0;
 }
 
-// draw lamb from texture (small for gameplay)
-static void drawLambfull(float x,float y,float sc){
-    C2D_DrawImageAt(lambImg, x-32*sc, y-32*sc, 0.6f, NULL, sc, sc);
-    C2D_DrawCircleSolid(x, y+30*sc, 0.55f, 8*sc, C2D_Color32(0,0,0,90));
-}
-
 static void drawEnemy(float x,float y,bool boss){
     float s=boss?1.6f:1.0f;
     C2D_DrawRectSolid(x-7*s,y+2*s,0.3f,14*s,16*s, C(0.15f,0.15f,0.15f));
@@ -224,27 +236,34 @@ static void drawAltar(float ox,float oy){
     C2D_DrawCircleSolid(x,y,0.3f,5, C(1.0f,0.8f,0.2f));
 }
 
-static void drawFollowerWander(float ox,float oy){
-    int n=followCount;
-    for(int i=0;i<n;i++){
-        float wx=fwX[i]-ox, wy=fwY[i]-oy;
-        if(wx<-30||wx>SCR_W+30||wy<-30||wy>SCR_H+30) continue;
-        if(fwWork[i]) C2D_DrawRectSolid(wx-5,wy-9,0.35f,10,4, C(1,0.85f,0.2f));
-        C2D_DrawRectSolid(wx-4,wy+2,0.3f,8,9, C(0.75f,0.1f,0.1f));
-        C2D_DrawCircleSolid(wx,wy,0.3f,6, C(0.35f,0.6f,0.25f));
-        C2D_DrawRectSolid(wx-5,wy-2,0.32f,10,3, C(0.95f,0.95f,0.95f));
-        C2D_DrawRectSolid(wx-5,wy+1,0.33f,10,2, C(0.95f,0.95f,0.95f));
-        C2D_DrawTriangle(wx,wy+1, C(0.9f,0.1f,0.1f), wx-2,wy-1, C(0.9f,0.1f,0.1f), wx+2,wy-1, C(0.9f,0.1f,0.1f),0.35f);
-        drawText(wx-14,wy-16,0.4f, fwName[i],1,1,0.6f);
+static void drawBuilding(float wx,float wy,int type){
+    float x=wx, y=wy;
+    if(type==0){ // house
+        C2D_DrawTriangle(x,y-14, C(0.7f,0.15f,0.15f), x-14,y, C(0.7f,0.15f,0.15f), x+14,y, C(0.7f,0.15f,0.15f),0.4f);
+        C2D_DrawRectSolid(x-14,y,0.39f,28,16, C(0.8f,0.7f,0.5f));
+        C2D_DrawRectSolid(x-4,y+6,0.41f,8,10, C(0.4f,0.25f,0.1f));
+    } else if(type==1){ // toilet
+        C2D_DrawRectSolid(x-8,y,0.39f,16,14, C(0.75f,0.75f,0.8f));
+        C2D_DrawCircleSolid(x,y-2,0.4f,5, C(0.9f,0.9f,0.95f));
+        C2D_DrawRectSolid(x-3,y+6,0.41f,6,8, C(0.4f,0.4f,0.45f));
+    } else if(type==2){ // kitchen (food place)
+        C2D_DrawTriangle(x,y-12, C(0.8f,0.4f,0.2f), x-14,y, C(0.8f,0.4f,0.2f), x+14,y, C(0.8f,0.4f,0.2f),0.4f);
+        C2D_DrawRectSolid(x-14,y,0.39f,28,16, C(0.6f,0.5f,0.35f));
+        // pot
+        C2D_DrawCircleSolid(x,y-4,0.42f,6, C(0.3f,0.3f,0.3f));
+        C2D_DrawRectSolid(x-2,y-8,0.43f,4,2, C(0.5f,0.5f,0.5f));
+    } else { // decor (flower)
+        C2D_DrawRectSolid(x-1,y,0.4f,2,8, C(0.2f,0.5f,0.2f));
+        C2D_DrawCircleSolid(x,y-3,0.41f,4, C(1,0.4f,0.6f));
+        C2D_DrawCircleSolid(x-3,y-1,0.41f,2, C(1,0.9f,0.3f));
     }
 }
 
 static void drawHouses(float ox,float oy){
     for(int i=0;i<buildCount;i++){
         float x=bx[i]-ox, y=by[i]-oy;
-        C2D_DrawTriangle(x,y-14, C(0.7f,0.15f,0.15f), x-14,y, C(0.7f,0.15f,0.15f), x+14,y, C(0.7f,0.15f,0.15f),0.4f);
-        C2D_DrawRectSolid(x-14,y,0.39f,28,16, C(0.8f,0.7f,0.5f));
-        C2D_DrawRectSolid(x-4,y+6,0.41f,8,10, C(0.4f,0.25f,0.1f));
+        if(x<-30||x>SCR_W+30||y<-30||y>SCR_H+30) continue;
+        drawBuilding(x,y,(int)btype[i]);
     }
 }
 
@@ -285,11 +304,65 @@ static void drawGame(void){
     drawPortal(ox,oy);
     drawHouses(ox,oy);
     drawFollowerWander(ox,oy);
-    drawLambfull(px-ox,py-oy,0.7f);
+    drawLambfull(px-ox,py-oy,1.0f);
     if(dmgFlash>0) C2D_DrawRectSolid(0,0,0.9f,SCR_W,SCR_H, C2D_Color32(255,0,0,50));
     char h[32]; snprintf(h,32,"Food:%d Cult:%d",score,followCount);
     drawText(8,30,0.5f,h,1,0.85f,0.3f);
     drawText(240,4,0.45f,"A: talk to follower",1,0.9f,0.4f);
+}
+
+static void drawFollowerWander(float ox,float oy){
+    int n=followCount;
+    for(int i=0;i<n;i++){
+        float wx=fwX[i]-ox, wy=fwY[i]-oy;
+        if(wx<-30||wx>SCR_W+30||wy<-30||wy>SCR_H+30) continue;
+        if(fwWork[i]) C2D_DrawRectSolid(wx-5,wy-9,0.35f,10,4, C(1,0.85f,0.2f));
+        C2D_DrawRectSolid(wx-4,wy+2,0.3f,8,9, C(0.75f,0.1f,0.1f));
+        C2D_DrawCircleSolid(wx,wy,0.3f,6, C(0.35f,0.6f,0.25f));
+        C2D_DrawRectSolid(wx-5,wy-2,0.32f,10,3, C(0.95f,0.95f,0.95f));
+        C2D_DrawRectSolid(wx-5,wy+1,0.33f,10,2, C(0.95f,0.95f,0.95f));
+        C2D_DrawTriangle(wx,wy+1, C(0.9f,0.1f,0.1f), wx-2,wy-1, C(0.9f,0.1f,0.1f), wx+2,wy-1, C(0.9f,0.1f,0.1f),0.35f);
+        drawText(wx-14,wy-16,0.4f, fwName[i],1,1,0.6f);
+    }
+}
+
+// lower screen: build selection + touch to place
+static void drawBottomGame(void){
+    drawBottomGrass();
+    if(talkMenuOpen){
+        const char* acts[4]={"WORK","SCARE","CHEER","READ MIND"};
+        for(int i=0;i<4;i++){
+            int y=20+i*50;
+            u32 col=(i==talkMenuSel)? C(0.55f,0.1f,0.15f): C(0.2f,0.4f,0.12f);
+            C2D_DrawRectSolid(20,y-4,0.3f,280,34, col);
+            float cr=(i==talkMenuSel)?1.0f:0.9f, cg=(i==talkMenuSel)?0.85f:0.9f, cb=(i==talkMenuSel)?0.3f:0.9f;
+            drawText(40,y,0.5f,acts[i],cr,cg,cb);
+        }
+    } else {
+        // build type selector (4 slots)
+        const char* types[4]={"HOUSE","TOILET","KITCHEN","DECOR"};
+        for(int i=0;i<4;i++){
+            int y=30+i*44;
+            u32 col=(i==buildSel)? C(0.55f,0.1f,0.15f): C(0.15f,0.4f,0.1f);
+            C2D_DrawRectSolid(20,y-3,0.3f,120,32, col);
+            drawText(30,y,0.45f,types[i],0.9f,0.9f,0.9f);
+        }
+        // tap zone hint on right
+        C2D_DrawRectSolid(170,60,0.3f,130,120, C(0.1f,0.3f,0.08f));
+        drawText(180,110,0.5f,"TAP = build",1,0.9f,0.4f);
+        drawText(180,180,0.45f,"A near cult = talk",1,0.85f,0.4f);
+    }
+}
+
+static void drawBottomGrass(void){
+    C2D_TargetClear(bottom, C(0.2f,0.5f,0.15f));
+    C2D_SceneBegin(bottom);
+    C2D_DrawRectSolid(0,0,0,BOT_W,BOT_H, C(0.2f,0.5f,0.15f));
+    for(int i=0;i<50;i++){
+        float gx=(i*37+10)% (BOT_W+8);
+        float gy=(i*53)% BOT_H;
+        C2D_DrawRectSolid(gx,gy,0.2f,2,6, C(0.3f,0.6f,0.2f));
+    }
 }
 
 static void drawDungeon(void){
@@ -327,34 +400,6 @@ static void drawTalkTop(void){
         snprintf(t,48,"%s - Moral %d", fwName[talkTarget], (int)fwM[talkTarget]);
     } else snprintf(t,48,"No one");
     drawText(40,30,0.6f,t,1,0.9f,0.4f);
-}
-
-static void drawBottomGrass(void){
-    C2D_TargetClear(bottom, C(0.2f,0.5f,0.15f));
-    C2D_SceneBegin(bottom);
-    C2D_DrawRectSolid(0,0,0,BOT_W,BOT_H, C(0.2f,0.5f,0.15f));
-    for(int i=0;i<50;i++){
-        float gx=(i*37+10)% (BOT_W+8);
-        float gy=(i*53)% BOT_H;
-        C2D_DrawRectSolid(gx,gy,0.2f,2,6, C(0.3f,0.6f,0.2f));
-    }
-}
-
-static void drawBottomGame(void){
-    drawBottomGrass();
-    if(talkMenuOpen){
-        const char* acts[4]={"WORK","SCARE","CHEER","READ MIND"};
-        for(int i=0;i<4;i++){
-            int y=20+i*50;
-            u32 col=(i==talkMenuSel)? C(0.55f,0.1f,0.15f): C(0.2f,0.4f,0.12f);
-            C2D_DrawRectSolid(20,y-4,0.3f,280,34, col);
-            float cr=(i==talkMenuSel)?1.0f:0.9f, cg=(i==talkMenuSel)?0.85f:0.9f, cb=(i==talkMenuSel)?0.3f:0.9f;
-            drawText(40,y,0.5f,acts[i],cr,cg,cb);
-        }
-    } else {
-        C2D_DrawRectSolid(20,180,0.5f,280,14, C(0.15f,0.4f,0.1f));
-        drawText(40,184,0.5f,"TAP = build  |  A near cult = talk",1,0.95f,0.4f);
-    }
 }
 
 static void drawMenuTop(void){
@@ -433,18 +478,32 @@ static void update(float dt){
             if(fwX[i]<20){fwX[i]=20;} if(fwX[i]>WORLD_W-20){fwX[i]=WORLD_W-20;}
             if(fwY[i]<20){fwY[i]=20;} if(fwY[i]>WORLD_H-20){fwY[i]=WORLD_H-20;}
         }
+        // touch: left 4 buttons select build type, right side = place build at world
         touchPosition tp;
         hidTouchRead(&tp);
         static float touchCd=0;
         if(touchCd>0) touchCd-=dt;
         if((tp.px!=0||tp.py!=0)&&touchCd<=0){
-            float wx=camx+(tp.px/(float)BOT_W)*SCR_W;
-            float wy=camy+(tp.py/(float)BOT_H)*SCR_H;
-            buildHouse(wx,wy);
+            float tpx=tp.px, tpy=tp.py;
+            if(tpx<160){
+                // select build type
+                int selt=(int)(tpy/44);
+                if(selt>=0&&selt<4) buildSel=selt;
+            } else {
+                // place build
+                float wx=camx+((tpx-170)/((float)BOT_W-170))*SCR_W + (tpx-170);
+                float wy=camy+(tpy/(float)BOT_H)*SCR_H;
+                tryBuild(buildSel,wx,wy);
+            }
             touchCd=0.3f;
         }
+        // passive food: followers + kitchen
         static float acc=0; acc+=dt;
-        if(acc>2.0f){ acc=0; int workTotal=0; for(int i=0;i<followCount;i++) if(fwWork[i]) workTotal++; score+= workTotal + followCount/3; }
+        if(acc>2.0f){ acc=0;
+            int workTotal=0; for(int i=0;i<followCount;i++) if(fwWork[i]) workTotal++;
+            int kitchenBonus = hasKitchen?2:0;
+            score+= workTotal + followCount/3 + kitchenBonus;
+        }
         if(dmgFlash>0) dmgFlash-=dt;
         u32 down=hidKeysDown();
         float gx=WORLD_W/2, gy=WORLD_H-60;
@@ -499,12 +558,13 @@ int main(void){
     bottom=C2D_CreateScreenTarget(GFX_BOTTOM,GFX_LEFT);
     sysFont=C2D_FontLoadSystem(CFG_REGION_USA);
     tBuf=C2D_TextBufNew(4096);
-    initLambTexture();
     bg=C(0.2f,0.5f,0.15f);
     red=C(0.85f,0.05f,0.1f);
     cream=C(0.95f,0.9f,0.8f);
     black=C(0.05f,0.05f,0.05f);
     white=C(1,1,1);
+    grey=C(0.45f,0.42f,0.42f);
+    yellow=C(1,0.85f,0.2f);
 
     while(aptMainLoop()){
         hidScanInput();
@@ -525,7 +585,6 @@ int main(void){
 
     C2D_TextBufDelete(tBuf);
     C2D_FontFree(sysFont);
-    C3D_TexDelete(&lambTex);
     C2D_Fini();
     C3D_Fini();
     gfxExit();
