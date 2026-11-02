@@ -21,7 +21,6 @@ static u32 C(float r,float g,float b){
     return C2D_Color32((int)(r*255),(int)(g*255),(int)(b*255),255);
 }
 
-// ---- ALL forward declarations ----
 static void startGame(void);
 static void updateCamera(void);
 static void addFollower(float x,float y,const char* nm);
@@ -56,6 +55,7 @@ static int talkTarget;
 static int talkMenuSel;
 static int talkMenuOpen;
 static int buildSel;
+static int buildFailMsg;
 
 enum GameState { ST_MENU, ST_PLAY, ST_DUNGEON, ST_TALK, ST_TEMPLE };
 static GameState state = ST_MENU;
@@ -126,10 +126,11 @@ static void addRandomFollower(float x,float y){
 }
 
 static void startGame(void){
-    score=12; buildCount=0; hasKitchen=0; hasTemple=0;
+    score=20; buildCount=0; hasKitchen=0; hasTemple=0;
     altarX=WORLD_W/2; altarY=WORLD_H/2;
     px=altarX+40; py=altarY; php=pmaxhp; dmgFlash=0;
     ritualCd=0;
+    buildFailMsg=0;
     addRandomFollower(altarX-40, altarY+20);
     addRandomFollower(altarX+40, altarY+10);
     addRandomFollower(altarX,     altarY+40);
@@ -139,8 +140,8 @@ static void startGame(void){
 
 static void tryBuild(int type,float x,float y){
     if(buildCount>=MAX_BUILD) return;
-    int cost = (type==0)?5 : (type==1)?4 : (type==2)?8 : (type==3)?2 : 10;
-    if(score<cost) return;
+    int cost = (type==0)?3 : (type==1)?2 : (type==2)?6 : (type==3)?1 : 8;
+    if(score<cost){ buildFailMsg=90; return; }
     if(type==2 && hasKitchen) return;
     if(type==4 && hasTemple) return;
     bx[buildCount]=x; by[buildCount]=y; btype[buildCount]=type; buildCount++;
@@ -365,20 +366,22 @@ static void drawBottomGame(void){
             int y=20+i*50;
             u32 col=(i==talkMenuSel)? C(0.55f,0.1f,0.15f): C(0.2f,0.4f,0.12f);
             C2D_DrawRectSolid(20,y-4,0.3f,280,34, col);
-            float cr=(i==talkMenuSel)?1.0f:0.9f, cg=(i==talkMenuSel)?0.85f:0.9f, cb=(i==talkMenuSel)?0.3f:0.9f;
-            drawText(40,y,0.5f,acts[i],cr,cg,cb);
+            drawText(40,y,0.5f,acts[i],0.9f,0.9f,0.9f);
         }
     } else {
         const char* types[5]={"HOUSE","TOILET","KITCHEN","DECOR","TEMPLE"};
+        const int costs[5]={3,2,6,1,8};
         for(int i=0;i<5;i++){
             int y=26+i*40;
             u32 col=(i==buildSel)? C(0.55f,0.1f,0.15f): C(0.15f,0.4f,0.1f);
             C2D_DrawRectSolid(20,y-3,0.3f,132,30, col);
             drawText(26,y,0.42f,types[i],0.95f,0.95f,0.95f);
+            char cr[12]; snprintf(cr,12,"%d",costs[i]);
+            drawText(128,y,0.42f,cr,1,0.9f,0.2f);
         }
         C2D_DrawRectSolid(180,80,0.3f,125,90, C(0.1f,0.3f,0.08f));
         drawText(186,120,0.5f,"TAP = build",1,0.9f,0.4f);
-        drawText(186,184,0.42f,"TAP temple = enter",0.9f,0.7f,0.5f);
+        if(buildFailMsg>0) drawText(186,96,0.5f,"NO FOOD!",1,0.4f,0.2f);
     }
 }
 
@@ -448,8 +451,7 @@ static void drawTempleBottom(void){
         int y=30+i*60;
         u32 col=(i==(int)templeMenuSel)? C(0.5f,0.1f,0.55f): C(0.2f,0.08f,0.25f);
         C2D_DrawRectSolid(40,y-4,0.3f,240,40, col);
-        float cr=(i==(int)templeMenuSel)?1.0f:0.9f;
-        drawText(60,y,0.55f,acts[i],cr,0.9f,0.9f);
+        drawText(60,y,0.55f,acts[i],0.95f,0.9f,0.9f);
     }
 }
 
@@ -501,8 +503,7 @@ static void drawBottomMenu(void){
         int y=45+i*50;
         u32 col=(i==menuSel)? C(0.55f,0.1f,0.15f): C(0.18f,0.12f,0.1f);
         C2D_DrawRectSolid(30,y-4,0.3f,260,30, col);
-        float cr=(i==menuSel)?1.0f:0.9f, cg=(i==menuSel)?0.85f:0.9f, cb=(i==menuSel)?0.3f:0.9f;
-        drawText(60,y-2,0.6f,items[i],cr,cg,cb);
+        drawText(60,y-2,0.6f,items[i],0.9f,0.9f,0.9f);
     }
 }
 
@@ -551,6 +552,7 @@ static void update(float dt){
             if(fwY[i]<20){fwY[i]=20;} if(fwY[i]>WORLD_H-20){fwY[i]=WORLD_H-20;}
         }
         if(ritualCd>0) ritualCd-=dt;
+        if(buildFailMsg>0) buildFailMsg-=dt;
         touchPosition tp;
         hidTouchRead(&tp);
         static float touchCd=0;
