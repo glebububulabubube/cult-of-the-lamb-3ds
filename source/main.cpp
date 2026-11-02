@@ -30,7 +30,7 @@ static int musicIdx = 0;
 
 static void playFrequency(float freq){
     u32 encodedFreq = (u32)(freq * 512);
-    csndPlaySound(8, SOUND_FORMAT_PSG | SOUND_ENABLE | encodedFreq, 32767);
+    csndPlaySound(8, SOUND_FORMAT_PSG | SOUND_ENABLE | encodedFreq, 0, 1.0f, 0.0f, NULL, NULL, 0);
 }
 
 static void updateMusic(bool dungeon){
