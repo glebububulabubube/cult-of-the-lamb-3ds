@@ -5,6 +5,7 @@
 #include <math.h>
 #include <string.h>
 #include <time.h>
+#include "lamb_tex.h"
 
 #define SCR_W 400
 #define SCR_H 240
@@ -54,7 +55,11 @@ static C3D_RenderTarget *top, *bottom;
 static u32 bg, red, cream, black, white;
 static C2D_Font sysFont;
 static C2D_TextBuf tBuf;
+
+// lamb texture objects
+static C3D_Tex lambTex;
 static C2D_Image lambImg;
+static Tex3DS_SubTexture lambSub;
 
 static const char* names[] = {
     "ZEB","MORK","LUG","ROK","SYN","BAR","NAT","VEX",
@@ -68,6 +73,20 @@ static void drawText(float x,float y,float scale,const char* s,float r,float g,f
     C2D_TextFontParse(&txt, sysFont, tBuf, s);
     C2D_TextOptimize(&txt);
     C2D_DrawText(&txt, C2D_AlignLeft, x, y, 0.3f, scale, scale, C(r,g,b));
+}
+
+static void initLambTexture(void){
+    C3D_TexInit(&lambTex, LAMB_TEX_W, LAMB_TEX_H, GPU_RGBA8);
+    C3D_TexUpload(&lambTex, lamb_tex);
+    C3D_TexFlush(&lambTex);
+    lambSub.width  = LAMB_TEX_W;
+    lambSub.height = LAMB_TEX_H;
+    lambSub.left   = 0;
+    lambSub.top    = 0;
+    lambSub.u0     = 1.0f;
+    lambSub.v0     = 1.0f;
+    lambImg.tex    = &lambTex;
+    lambImg.subtex = &lambSub;
 }
 
 static void addFollower(float x,float y,const char* nm){
@@ -179,18 +198,10 @@ static void returnToCult(void){
     talkMenuOpen=0;
 }
 
+// draw lamb from texture
 static void drawLambfull(float x,float y,float sc){
-    C2D_DrawCircleSolid(x,y+6*sc,0.5f,14*sc, C(0.9f,0.1f,0.12f));
-    C2D_DrawRectSolid(x-11*sc,y-2*sc,0.6f,22*sc,18*sc, C(0.85f,0.05f,0.1f));
-    C2D_DrawCircleSolid(x,y-4*sc,0.5f,13*sc, C(1,1,1));
-    C2D_DrawCircleSolid(x,y-4*sc,0.49f,9*sc, C(0.05f,0.05f,0.05f));
-    C2D_DrawCircleSolid(x-4*sc,y-5*sc,0.55f,2.5f*sc, C(1,0,0));
-    C2D_DrawCircleSolid(x+4*sc,y-5*sc,0.55f,2.5f*sc, C(1,0,0));
-    C2D_DrawRectSolid(x-5*sc,y-2*sc,0.56f,1.5f*sc,4*sc, C(1,0,0));
-    C2D_DrawRectSolid(x+3.5f*sc,y-2*sc,0.56f,1.5f*sc,4*sc, C(1,0,0));
-    C2D_DrawRectSolid(x-13*sc,y-9*sc,0.5f,4*sc,8*sc, black);
-    C2D_DrawRectSolid(x+9*sc,y-9*sc,0.5f,4*sc,8*sc, black);
-    C2D_DrawCircleSolid(x,y+6*sc,0.55f,3.5f*sc, C(1,0.85f,0.2f));
+    C2D_DrawImageAt(lambImg, x-32*sc, y-32*sc, 0.6f, NULL, sc, sc);
+    C2D_DrawCircleSolid(x, y+30*sc, 0.55f, 8*sc, C2D_Color32(0,0,0,90));
 }
 
 static void drawEnemy(float x,float y,bool boss){
@@ -489,6 +500,7 @@ int main(void){
     bottom=C2D_CreateScreenTarget(GFX_BOTTOM,GFX_LEFT);
     sysFont=C2D_FontLoadSystem(CFG_REGION_USA);
     tBuf=C2D_TextBufNew(4096);
+    initLambTexture();
     bg=C(0.2f,0.5f,0.15f);
     red=C(0.85f,0.05f,0.1f);
     cream=C(0.95f,0.9f,0.8f);
@@ -514,6 +526,7 @@ int main(void){
 
     C2D_TextBufDelete(tBuf);
     C2D_FontFree(sysFont);
+    C3D_TexDelete(&lambTex);
     C2D_Fini();
     C3D_Fini();
     gfxExit();
