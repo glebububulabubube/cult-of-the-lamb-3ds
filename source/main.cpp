@@ -21,16 +21,27 @@ static u32 C(float r,float g,float b){
     return C2D_Color32((int)(r*255),(int)(g*255),(int)(b*255),255);
 }
 
+// forward declarations (so functions can use each other in any order)
+static void returnToCult(void);
+static void updateDungeon(float dt);
+static void startGame(void);
+static void buildHouse(float x,float y);
+static void updateCamera(void);
+static void addFollower(float x,float y,const char* nm);
+static void addRandomFollower(float x,float y);
+static void enterDungeon(void);
+static void drawText(float x,float y,float scale,const char* s,float r,float g,float b);
+
 static float px,py,php,pmaxhp=100.0f;
 static float camx,camy;
 static float bx[MAX_BUILD],by[MAX_BUILD]; static int buildCount;
 static float fwX[MAX_FOLLOW],fwY[MAX_FOLLOW],fwT[MAX_FOLLOW],fwM[MAX_FOLLOW]; static int followCount;
-static int fwWork[MAX_FOLLOW];        // 1=working
+static int fwWork[MAX_FOLLOW];
 static char fwName[MAX_FOLLOW][24];
 static float altarX,altarY;
 static int score;
 static float dmgFlash;
-static int talkTarget;               // -1 none, else index
+static int talkTarget;
 static int talkMenuSel;
 static int talkMenuOpen;
 
@@ -55,8 +66,7 @@ static const char* thoughts[] = {
     "loves the lamb","suspicious","sees visions","wants more food"
 };
 static int thoughtCount = 8;
-static void returnToCult(void);
-static void updateDungeon(float dt);
+static float rnd(float a,float b){ return a + (float)rand()/(float)RAND_MAX*(b-a); }
 
 static void drawText(float x,float y,float scale,const char* s,float r,float g,float b){
     C2D_Text txt;
@@ -69,8 +79,8 @@ static void addFollower(float x,float y,const char* nm){
     if(followCount>=MAX_FOLLOW) return;
     fwX[followCount]=x; fwY[followCount]=y;
     fwT[followCount]=rnd(0,6.28f);
-    fwM[followCount]=50;          // starting morale 0-100
-    fwWork[followCount]=0;        // idle by default
+    fwM[followCount]=50;
+    fwWork[followCount]=0;
     snprintf(fwName[followCount],24,"%s",nm);
     followCount++;
 }
@@ -104,7 +114,6 @@ static void updateCamera(void){
     if(camy>WORLD_H-SCR_H){camy=WORLD_H-SCR_H;}
 }
 
-// ---------- dungeon ----------
 static float dpx,dpy;
 static int dungeonBoss;
 static float ex[MAX_ENEMY],ey[MAX_ENEMY],ehp[MAX_ENEMY],espeed[MAX_ENEMY]; static int ecount;
@@ -169,6 +178,11 @@ static void updateDungeon(float dt){
         score+=5;
     }
 }
+static void returnToCult(void){
+    state=ST_PLAY;
+    php=pmaxhp;
+    talkMenuOpen=0;
+}
 
 static void drawLambfull(float x,float y,float sc){
     C2D_DrawCircleSolid(x,y+6*sc,0.5f,14*sc, C(0.9f,0.1f,0.12f));
@@ -210,7 +224,6 @@ static void drawFollowerWander(float ox,float oy){
     for(int i=0;i<n;i++){
         float wx=fwX[i]-ox, wy=fwY[i]-oy;
         if(wx<-30||wx>SCR_W+30||wy<-30||wy>SCR_H+30) continue;
-        // work indicator: gold cap if working
         if(fwWork[i]) C2D_DrawRectSolid(wx-5,wy-9,0.35f,10,4, C(1,0.85f,0.2f));
         C2D_DrawRectSolid(wx-4,wy+2,0.3f,8,9, C(0.75f,0.1f,0.1f));
         C2D_DrawCircleSolid(wx,wy,0.3f,6, C(0.35f,0.6f,0.25f));
@@ -243,10 +256,8 @@ static void drawPortal(float ox,float oy){
     drawText(gx-30,gy+18,0.5f,"DUNGEON",1,0.5f,0.5f);
 }
 
-// draw grass background (scrolls with camera for world, solid for screens)
 static void drawGrassBg(void){
     C2D_DrawRectSolid(0,0,0,SCR_W,SCR_H, C(0.2f,0.5f,0.15f));
-    // grass blades
     for(int i=0;i<60;i++){
         float gx=(i*37 + ((int)tclock*10)) % (SCR_W+8);
         float gy=(i*53) % SCR_H;
@@ -255,7 +266,7 @@ static void drawGrassBg(void){
     for(int i=0;i<40;i++){
         float gx=(i*61+20) % (SCR_W+8);
         float gy=(i*71+30) % SCR_H;
-        C2D_DrawCircleSolid(gx,gy,0.2f,2, C(0.5f,0.7f,0.3f)); // small flowers
+        C2D_DrawCircleSolid(gx,gy,0.2f,2, C(0.5f,0.7f,0.3f));
     }
 }
 
@@ -273,7 +284,6 @@ static void drawGame(void){
     if(dmgFlash>0) C2D_DrawRectSolid(0,0,0.9f,SCR_W,SCR_H, C2D_Color32(255,0,0,50));
     char h[32]; snprintf(h,32,"Food:%d Cult:%d",score,followCount);
     drawText(8,30,0.5f,h,1,0.85f,0.3f);
-    // hint: talk near follower
     drawText(240,4,0.45f,"A: talk to follower",1,0.9f,0.4f);
 }
 
@@ -306,7 +316,6 @@ static void drawTalkTop(void){
     C2D_TargetClear(top, bg);
     C2D_SceneBegin(top);
     drawGrassBg();
-    // semi-transparent dark overlay
     C2D_DrawRectSolid(0,0,0.5f,SCR_W,SCR_H, C2D_Color32(0,0,0,160));
     char t[48];
     if(talkTarget>=0 && talkTarget<followCount){
@@ -328,13 +337,11 @@ static void drawBottomGrass(void){
 
 static void drawBottomGame(void){
     drawBottomGrass();
-    // build hint on grass
     if(talkMenuOpen){
-        // talk menu
         const char* acts[4]={"WORK","SCARE","CHEER","READ MIND"};
         for(int i=0;i<4;i++){
             int y=20+i*50;
-            u32 col = (i==talkMenuSel)? C(0.55f,0.1f,0.15f): C(0.2f,0.4f,0.12f);
+            u32 col=(i==talkMenuSel)? C(0.55f,0.1f,0.15f): C(0.2f,0.4f,0.12f);
             C2D_DrawRectSolid(20,y-4,0.3f,280,34, col);
             float cr=(i==talkMenuSel)?1.0f:0.9f, cg=(i==talkMenuSel)?0.85f:0.9f, cb=(i==talkMenuSel)?0.3f:0.9f;
             drawText(40,y,0.5f,acts[i],cr,cg,cb);
@@ -387,15 +394,14 @@ static void drawBottomDungeon(void){
     drawText(30,100,0.6f,h,1,0.8f,0.4f);
 }
 
-// talk menu actions
 static void doTalkAction(int action){
     if(talkTarget<0||talkTarget>=followCount){ talkMenuOpen=0; state=ST_PLAY; return; }
     int i=talkTarget;
     switch(action){
-        case 0: fwWork[i]=1; score+=3; break;              // WORK: +3 food now, keeps working
-        case 1: fwM[i]-=15; score+=4; break;               // SCARE: morier down, works more
-        case 2: fwM[i]+=20; if(score>=2)score-=2; break;   // CHEER: morale up, small cost
-        case 3: break;                                     // READ MIND: shows thought
+        case 0: fwWork[i]=1; score+=3; break;
+        case 1: fwM[i]-=15; score+=4; break;
+        case 2: fwM[i]+=20; if(score>=2)score-=2; break;
+        case 3: break;
     }
     talkMenuOpen=0;
     state=ST_PLAY;
@@ -438,7 +444,6 @@ static void update(float dt){
         u32 down=hidKeysDown();
         float gx=WORLD_W/2, gy=WORLD_H-60;
         if((down&KEY_A)&&hypotf(gx-px,gy-py)<30){ state=ST_DUNGEON; enterDungeon(); }
-        // talk to follower
         if(down&KEY_A){
             for(int i=0;i<followCount;i++){
                 if(hypotf(fwX[i]-px,fwY[i]-py)<28){
@@ -455,7 +460,6 @@ static void update(float dt){
         hidTouchRead(&tp);
         u32 down=hidKeysDown();
         if(down&KEY_B){ talkMenuOpen=0; state=ST_PLAY; }
-        // cycle selection
         if(down&(KEY_DUP|KEY_CPAD_UP)) talkMenuSel=(talkMenuSel+3)%4;
         if(down&(KEY_DDOWN|KEY_CPAD_DOWN)) talkMenuSel=(talkMenuSel+1)%4;
         static float tCd=0; if(tCd>0)tCd-=dt;
@@ -478,12 +482,6 @@ static void update(float dt){
             mCd=0.3f;
         }
     }
-}
-
-static void returnToCult(void){
-    state=ST_PLAY;
-    php=pmaxhp;
-    talkMenuOpen=0;
 }
 
 int main(void){
