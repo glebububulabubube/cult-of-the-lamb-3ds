@@ -51,7 +51,7 @@ static float tclock;
 static bool wantExit=false;
 
 static C3D_RenderTarget *top, *bottom;
-static u32 bg, red, cream, black, white, grey, yellow, fur;
+static u32 bg, red, cream, black, white, grey, yellow;
 static C2D_Font sysFont;
 static C2D_TextBuf tBuf;
 
@@ -69,48 +69,50 @@ static void drawText(float x,float y,float scale,const char* s,float r,float g,f
     C2D_DrawText(&txt, C2D_AlignLeft, x, y, 0.3f, scale, scale, C(r,g,b));
 }
 
-// --- detailed procedural lamb based on the picture ---
+// detailed lamb: long legs, arms at sides, square crown with horns and eye
 static void drawLambfull(float x,float y,float sc){
     // shadow
-    C2D_DrawCircleSolid(x, y+22*sc, 0.6f, 9*sc, C2D_Color32(0,0,0,90));
-    // legs (grey)
-    C2D_DrawRectSolid(x-9*sc, y+12*sc, 0.3f, 4*sc, 8*sc, grey);
-    C2D_DrawRectSolid(x+5*sc, y+12*sc, 0.3f, 4*sc, 8*sc, grey);
-    // arms (grey)
-    C2D_DrawRectSolid(x-16*sc, y+4*sc, 0.3f, 4*sc, 7*sc, grey);
-    C2D_DrawRectSolid(x+12*sc, y+4*sc, 0.3f, 4*sc, 7*sc, grey);
+    C2D_DrawCircleSolid(x, y+24*sc, 0.6f, 10*sc, C2D_Color32(0,0,0,90));
+    // legs (grey) - long, below cloak
+    C2D_DrawRectSolid(x-8*sc, y+12*sc, 0.3f, 5*sc, 12*sc, grey);
+    C2D_DrawRectSolid(x+3*sc, y+12*sc, 0.3f, 5*sc, 12*sc, grey);
     // red cloak body
-    C2D_DrawRectSolid(x-13*sc, y-4*sc, 0.4f, 26*sc, 18*sc, red);
+    C2D_DrawRectSolid(x-13*sc, y-6*sc, 0.4f, 26*sc, 20*sc, red);
     // white zigzag trim at cloak bottom
     for(int i=0;i<5;i++){
         float zx=x-12*sc+i*6*sc;
-        C2D_DrawRectSolid(zx, y+14*sc, 0.41f, 4*sc, 3*sc, (i%2)? white : C(0.9f,0.9f,0.9f));
+        C2D_DrawRectSolid(zx, y+13*sc, 0.41f, 5*sc, 3*sc, (i%2)? white : C(0.9f,0.9f,0.9f));
     }
+    // arms (grey) over body, at sides
+    C2D_DrawRectSolid(x-17*sc, y-2*sc, 0.5f, 5*sc, 9*sc, grey);
+    C2D_DrawRectSolid(x+12*sc, y-2*sc, 0.5f, 5*sc, 9*sc, grey);
     // golden bell on chest
-    C2D_DrawCircleSolid(x, y+2*sc, 0.5f, 4*sc, yellow);
-    C2D_DrawCircleSolid(x-1*sc, y+2*sc, 0.6f, 1*sc, black); // skull eye
-    C2D_DrawCircleSolid(x+1*sc, y+2*sc, 0.6f, 1*sc, black);
+    C2D_DrawCircleSolid(x, y+3*sc, 0.51f, 4*sc, yellow);
+    C2D_DrawCircleSolid(x-1*sc, y+3*sc, 0.6f, 1*sc, black);
+    C2D_DrawCircleSolid(x+1*sc, y+3*sc, 0.6f, 1*sc, black);
     // white fluffy fur behind head
     for(int i=0;i<12;i++){
         float a=i*2.0f*3.14159f/12.0f;
-        C2D_DrawCircleSolid(x+cos(a)*12*sc, y-20*sc+sin(a)*8*sc, 0.3f, 5*sc, white);
+        C2D_DrawCircleSolid(x+cos(a)*11*sc, y-13*sc+sin(a)*7*sc, 0.3f, 5*sc, white);
     }
-    // head: grey face
-    C2D_DrawCircleSolid(x, y-22*sc, 0.5f, 9*sc, grey);
+    // head: grey face, sits on body
+    C2D_DrawCircleSolid(x, y-15*sc, 0.5f, 9*sc, grey);
     // ears grey
-    C2D_DrawTriangle(x-11*sc, y-27*sc, C(0.6f,0.55f,0.55f), x-7*sc,y-22*sc, C(0.6f,0.55f,0.55f), x-4*sc,y-29*sc, C(0.6f,0.55f,0.55f), 0.5f);
-    C2D_DrawTriangle(x+11*sc, y-27*sc, C(0.6f,0.55f,0.55f), x+7*sc,y-22*sc, C(0.6f,0.55f,0.55f), x+4*sc,y-29*sc, C(0.6f,0.55f,0.55f), 0.5f);
-    // red horns
-    C2D_DrawRectSolid(x-7*sc, y-34*sc, 0.5f, 3*sc, 5*sc, red);
-    C2D_DrawRectSolid(x+4*sc, y-34*sc, 0.5f, 3*sc, 5*sc, red);
+    C2D_DrawTriangle(x-11*sc, y-19*sc, C(0.6f,0.55f,0.55f), x-6*sc,y-14*sc, C(0.6f,0.55f,0.55f), x-3*sc,y-21*sc, C(0.6f,0.55f,0.55f), 0.55f);
+    C2D_DrawTriangle(x+11*sc, y-19*sc, C(0.6f,0.55f,0.55f), x+6*sc,y-14*sc, C(0.6f,0.55f,0.55f), x+3*sc,y-21*sc, C(0.6f,0.55f,0.55f), 0.55f);
     // eyes black with white highlights
-    C2D_DrawCircleSolid(x-3.5f*sc, y-24*sc, 0.55f, 2*sc, black);
-    C2D_DrawCircleSolid(x+3.5f*sc, y-24*sc, 0.55f, 2*sc, black);
-    C2D_DrawCircleSolid(x-3*sc, y-25*sc, 0.6f, 0.8f*sc, white); // highlight
-    C2D_DrawCircleSolid(x+4*sc, y-25*sc, 0.6f, 0.8f*sc, white);
-    // third eye symbol above head (black crown + red eye)
-    C2D_DrawTriangle(x, y-42*sc, C(0.1f,0.1f,0.1f), x-5*sc,y-36*sc, C(0.1f,0.1f,0.1f), x+5*sc,y-36*sc, C(0.1f,0.1f,0.1f), 0.5f);
-    C2D_DrawCircleSolid(x, y-39*sc, 0.6f, 1.5f*sc, C(1,0,0));
+    C2D_DrawCircleSolid(x-3.5f*sc, y-16*sc, 0.55f, 2*sc, black);
+    C2D_DrawCircleSolid(x+3.5f*sc, y-16*sc, 0.55f, 2*sc, black);
+    C2D_DrawCircleSolid(x-3*sc, y-17*sc, 0.6f, 0.8f*sc, white);
+    C2D_DrawCircleSolid(x+4*sc, y-17*sc, 0.6f, 0.8f*sc, white);
+    // square crown (gold) above head
+    C2D_DrawRectSolid(x-8*sc, y-30*sc, 0.5f, 16*sc, 8*sc, yellow);
+    C2D_DrawRectSolid(x-8*sc, y-30*sc, 0.51f, 16*sc, 2*sc, white); // crown band
+    // horns on the crown (small black)
+    C2D_DrawRectSolid(x-9*sc, y-33*sc, 0.52f, 3*sc, 5*sc, black);
+    C2D_DrawRectSolid(x+6*sc, y-33*sc, 0.52f, 3*sc, 5*sc, black);
+    // red eye in the crown center
+    C2D_DrawCircleSolid(x, y-26*sc, 0.6f, 2.5f*sc, C(1,0,0));
 }
 
 static void addFollower(float x,float y,const char* nm){
@@ -525,7 +527,6 @@ int main(void){
     white=C(1,1,1);
     grey=C(0.45f,0.42f,0.42f);
     yellow=C(1,0.85f,0.2f);
-    fur=C(0.95f,0.95f,0.95f);
 
     while(aptMainLoop()){
         hidScanInput();
