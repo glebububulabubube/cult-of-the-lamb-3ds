@@ -5,6 +5,7 @@
 #include <math.h>
 #include <string.h>
 #include <time.h>
+#include "lamb_tex.h"
 
 #define SCR_W 400
 #define SCR_H 240
@@ -21,7 +22,6 @@ static u32 C(float r,float g,float b){
     return C2D_Color32((int)(r*255),(int)(g*255),(int)(b*255),255);
 }
 
-// forward declarations (so functions can use each other in any order)
 static void returnToCult(void);
 static void updateDungeon(float dt);
 static void startGame(void);
@@ -55,6 +55,7 @@ static C3D_RenderTarget *top, *bottom;
 static u32 bg, red, cream, black, white;
 static C2D_Font sysFont;
 static C2D_TextBuf tBuf;
+static C2D_Image lambImg;
 
 static const char* names[] = {
     "ZEB","MORK","LUG","ROK","SYN","BAR","NAT","VEX",
@@ -184,22 +185,15 @@ static void returnToCult(void){
     talkMenuOpen=0;
 }
 
+// draw lamb from imported texture
 static void drawLambfull(float x,float y,float sc){
-    C2D_DrawCircleSolid(x,y+6*sc,0.5f,14*sc, C(0.9f,0.1f,0.12f));
-    C2D_DrawRectSolid(x-11*sc,y-2*sc,0.6f,22*sc,18*sc, C(0.85f,0.05f,0.1f));
-    C2D_DrawCircleSolid(x,y-4*sc,0.5f,13*sc, C(1,1,1));
-    C2D_DrawCircleSolid(x,y-4*sc,0.49f,9*sc, C(0.05f,0.05f,0.05f));
-    C2D_DrawCircleSolid(x-4*sc,y-5*sc,0.55f,2.5f*sc, C(1,0,0));
-    C2D_DrawCircleSolid(x+4*sc,y-5*sc,0.55f,2.5f*sc, C(1,0,0));
-    C2D_DrawRectSolid(x-5*sc,y-2*sc,0.56f,1.5f*sc,4*sc, C(1,0,0));
-    C2D_DrawRectSolid(x+3.5f*sc,y-2*sc,0.56f,1.5f*sc,4*sc, C(1,0,0));
-    C2D_DrawRectSolid(x-13*sc,y-9*sc,0.5f,4*sc,8*sc, black);
-    C2D_DrawRectSolid(x+9*sc,y-9*sc,0.5f,4*sc,8*sc, black);
-    C2D_DrawCircleSolid(x,y+6*sc,0.55f,3.5f*sc, C(1,0.85f,0.2f));
+    C2D_DrawImage(lambImg, x-32*sc, y-32*sc, 64*sc, 64*sc, 0.6f);
+    // subtle shadow
+    C2D_DrawCircleSolid(x, y+28*sc, 0.55f, 8*sc, C2D_Color32(0,0,0,80));
 }
 
 static void drawEnemy(float x,float y,bool boss){
-    float s=boss?1.6f:1.0f;
+    float s=boss?2.0f:1.3f;
     C2D_DrawRectSolid(x-7*s,y+2*s,0.3f,14*s,16*s, C(0.15f,0.15f,0.15f));
     C2D_DrawCircleSolid(x,y,0.3f,8*s, C(0.1f,0.1f,0.1f));
     C2D_DrawRectSolid(x-1*s,y-2*s,0.4f,2*s,6*s, C(1,0,0));
@@ -223,7 +217,7 @@ static void drawFollowerWander(float ox,float oy){
     int n=followCount;
     for(int i=0;i<n;i++){
         float wx=fwX[i]-ox, wy=fwY[i]-oy;
-        if(wx<-30||wx>SCR_W+30||wy<-30||wy>SCR_H+30) continue;
+        if(wx<-20||wx>SCR_W+20||wy<-20||wy>SCR_H+20) continue;
         if(fwWork[i]) C2D_DrawRectSolid(wx-5,wy-9,0.35f,10,4, C(1,0.85f,0.2f));
         C2D_DrawRectSolid(wx-4,wy+2,0.3f,8,9, C(0.75f,0.1f,0.1f));
         C2D_DrawCircleSolid(wx,wy,0.3f,6, C(0.35f,0.6f,0.25f));
@@ -293,16 +287,12 @@ static void drawDungeon(void){
     C2D_DrawRectSolid(0,0,0,SCR_W,SCR_H, C(0.1f,0.06f,0.06f));
     for(int i=0;i<SCR_W;i+=32) C2D_DrawRectSolid(i,0,0.1f,1,SCR_H, C(0,0,0));
     for(int j=0;j<SCR_H;j+=32) C2D_DrawRectSolid(0,j,0.1f,SCR_W,1, C(0,0,0));
-    C2D_DrawRectSolid(0,0,0.2f,SCR_W,4, C(0.4f,0.2f,0.2f));
-    C2D_DrawRectSolid(0,SCR_H-4,0.2f,SCR_W,4, C(0.4f,0.2f,0.2f));
-    C2D_DrawRectSolid(0,0,0.2f,4,SCR_H, C(0.4f,0.2f,0.2f));
-    C2D_DrawRectSolid(SCR_W-4,0,0.2f,4,SCR_H, C(0.4f,0.2f,0.2f));
     for(int i=0;i<ecount;i++){
         if(ehp[i]<=0) continue;
         bool boss=(dungeonBoss&&i==ecount-1);
         drawEnemy(ex[i],ey[i],boss);
     }
-    drawLambfull(dpx,dpy,1.0f);
+    drawLambfull(dpx,dpy,1.2f);
     float mx=SCR_W/2-80, my=12;
     C2D_DrawRectSolid(mx,my,0.5f,160,8, C(0.2f,0.1f,0.1f));
     if(bossDead) C2D_DrawRectSolid(mx+1,my+1,0.51f,158,6, C(1,0.3f,0.2f));
@@ -494,6 +484,8 @@ int main(void){
     bottom=C2D_CreateScreenTarget(GFX_BOTTOM,GFX_LEFT);
     sysFont=C2D_FontLoadSystem(CFG_REGION_USA);
     tBuf=C2D_TextBufNew(4096);
+    // create lamb image from imported texture
+    lambImg = C2D_CreateImage(lamb_tex, LAMB_TEX_W, LAMB_TEX_H);
     bg=C(0.2f,0.5f,0.15f);
     red=C(0.85f,0.05f,0.1f);
     cream=C(0.95f,0.9f,0.8f);
