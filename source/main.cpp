@@ -5,6 +5,7 @@
 #include <math.h>
 #include <string.h>
 #include <time.h>
+#include "lamb_tex.h"
 
 #define SCR_W 400
 #define SCR_H 240
@@ -51,9 +52,13 @@ static float tclock;
 static bool wantExit=false;
 
 static C3D_RenderTarget *top, *bottom;
-static u32 bg, red, cream, black, white, grey, yellow;
+static u32 bg, red, cream, black, white;
 static C2D_Font sysFont;
 static C2D_TextBuf tBuf;
+
+static C3D_Tex lambTex;
+static C2D_Image lambImg;
+static Tex3DS_SubTexture lambSub;
 
 static const char* names[] = {
     "ZEB","MORK","LUG","ROK","SYN","BAR","NAT","VEX",
@@ -69,50 +74,18 @@ static void drawText(float x,float y,float scale,const char* s,float r,float g,f
     C2D_DrawText(&txt, C2D_AlignLeft, x, y, 0.3f, scale, scale, C(r,g,b));
 }
 
-// detailed lamb: long legs, arms at sides, square crown with horns and eye
-static void drawLambfull(float x,float y,float sc){
-    // shadow
-    C2D_DrawCircleSolid(x, y+24*sc, 0.6f, 10*sc, C2D_Color32(0,0,0,90));
-    // legs (grey) - long, below cloak
-    C2D_DrawRectSolid(x-8*sc, y+12*sc, 0.3f, 5*sc, 12*sc, grey);
-    C2D_DrawRectSolid(x+3*sc, y+12*sc, 0.3f, 5*sc, 12*sc, grey);
-    // red cloak body
-    C2D_DrawRectSolid(x-13*sc, y-6*sc, 0.4f, 26*sc, 20*sc, red);
-    // white zigzag trim at cloak bottom
-    for(int i=0;i<5;i++){
-        float zx=x-12*sc+i*6*sc;
-        C2D_DrawRectSolid(zx, y+13*sc, 0.41f, 5*sc, 3*sc, (i%2)? white : C(0.9f,0.9f,0.9f));
-    }
-    // arms (grey) over body, at sides
-    C2D_DrawRectSolid(x-17*sc, y-2*sc, 0.5f, 5*sc, 9*sc, grey);
-    C2D_DrawRectSolid(x+12*sc, y-2*sc, 0.5f, 5*sc, 9*sc, grey);
-    // golden bell on chest
-    C2D_DrawCircleSolid(x, y+3*sc, 0.51f, 4*sc, yellow);
-    C2D_DrawCircleSolid(x-1*sc, y+3*sc, 0.6f, 1*sc, black);
-    C2D_DrawCircleSolid(x+1*sc, y+3*sc, 0.6f, 1*sc, black);
-    // white fluffy fur behind head
-    for(int i=0;i<12;i++){
-        float a=i*2.0f*3.14159f/12.0f;
-        C2D_DrawCircleSolid(x+cos(a)*11*sc, y-13*sc+sin(a)*7*sc, 0.3f, 5*sc, white);
-    }
-    // head: grey face, sits on body
-    C2D_DrawCircleSolid(x, y-15*sc, 0.5f, 9*sc, grey);
-    // ears grey
-    C2D_DrawTriangle(x-11*sc, y-19*sc, C(0.6f,0.55f,0.55f), x-6*sc,y-14*sc, C(0.6f,0.55f,0.55f), x-3*sc,y-21*sc, C(0.6f,0.55f,0.55f), 0.55f);
-    C2D_DrawTriangle(x+11*sc, y-19*sc, C(0.6f,0.55f,0.55f), x+6*sc,y-14*sc, C(0.6f,0.55f,0.55f), x+3*sc,y-21*sc, C(0.6f,0.55f,0.55f), 0.55f);
-    // eyes black with white highlights
-    C2D_DrawCircleSolid(x-3.5f*sc, y-16*sc, 0.55f, 2*sc, black);
-    C2D_DrawCircleSolid(x+3.5f*sc, y-16*sc, 0.55f, 2*sc, black);
-    C2D_DrawCircleSolid(x-3*sc, y-17*sc, 0.6f, 0.8f*sc, white);
-    C2D_DrawCircleSolid(x+4*sc, y-17*sc, 0.6f, 0.8f*sc, white);
-    // square crown (gold) above head
-    C2D_DrawRectSolid(x-8*sc, y-30*sc, 0.5f, 16*sc, 8*sc, yellow);
-    C2D_DrawRectSolid(x-8*sc, y-30*sc, 0.51f, 16*sc, 2*sc, white); // crown band
-    // horns on the crown (small black)
-    C2D_DrawRectSolid(x-9*sc, y-33*sc, 0.52f, 3*sc, 5*sc, black);
-    C2D_DrawRectSolid(x+6*sc, y-33*sc, 0.52f, 3*sc, 5*sc, black);
-    // red eye in the crown center
-    C2D_DrawCircleSolid(x, y-26*sc, 0.6f, 2.5f*sc, C(1,0,0));
+static void initLambTexture(void){
+    C3D_TexInit(&lambTex, LAMB_TEX_W, LAMB_TEX_H, GPU_RGBA8);
+    C3D_TexUpload(&lambTex, lamb_tex);
+    C3D_TexFlush(&lambTex);
+    lambSub.width  = LAMB_TEX_W;
+    lambSub.height = LAMB_TEX_H;
+    lambSub.left   = 0.0f;
+    lambSub.top    = 0.0f;
+    lambSub.right  = 1.0f;
+    lambSub.bottom = 1.0f;
+    lambImg.tex    = &lambTex;
+    lambImg.subtex = &lambSub;
 }
 
 static void addFollower(float x,float y,const char* nm){
@@ -224,6 +197,12 @@ static void returnToCult(void){
     talkMenuOpen=0;
 }
 
+// draw lamb from texture (small for gameplay)
+static void drawLambfull(float x,float y,float sc){
+    C2D_DrawImageAt(lambImg, x-32*sc, y-32*sc, 0.6f, NULL, sc, sc);
+    C2D_DrawCircleSolid(x, y+30*sc, 0.55f, 8*sc, C2D_Color32(0,0,0,90));
+}
+
 static void drawEnemy(float x,float y,bool boss){
     float s=boss?1.6f:1.0f;
     C2D_DrawRectSolid(x-7*s,y+2*s,0.3f,14*s,16*s, C(0.15f,0.15f,0.15f));
@@ -306,7 +285,7 @@ static void drawGame(void){
     drawPortal(ox,oy);
     drawHouses(ox,oy);
     drawFollowerWander(ox,oy);
-    drawLambfull(px-ox,py-oy,1.0f);
+    drawLambfull(px-ox,py-oy,0.7f);
     if(dmgFlash>0) C2D_DrawRectSolid(0,0,0.9f,SCR_W,SCR_H, C2D_Color32(255,0,0,50));
     char h[32]; snprintf(h,32,"Food:%d Cult:%d",score,followCount);
     drawText(8,30,0.5f,h,1,0.85f,0.3f);
@@ -328,7 +307,7 @@ static void drawDungeon(void){
         bool boss=(dungeonBoss&&i==ecount-1);
         drawEnemy(ex[i],ey[i],boss);
     }
-    drawLambfull(dpx,dpy,1.0f);
+    drawLambfull(dpx,dpy,0.7f);
     float mx=SCR_W/2-80, my=12;
     C2D_DrawRectSolid(mx,my,0.5f,160,8, C(0.2f,0.1f,0.1f));
     if(bossDead) C2D_DrawRectSolid(mx+1,my+1,0.51f,158,6, C(1,0.3f,0.2f));
@@ -391,7 +370,7 @@ static void drawMenuTop(void){
         C2D_DrawLine(cx+cos(a0)*R,cy+sin(a0)*R, C(0.9f,0.15f,0.15f),
                      cx+cos(a1)*R,cy+sin(a1)*R, C(0.9f,0.15f,0.15f),3.0f,0.5f);
     }
-    drawLambfull(cx,cy-R-18,1.6f);
+    drawLambfull(cx,cy-R-18,1.4f);
     drawText(40,12,0.8f,"CULT OF THE LAMB",0.9f,0.1f,0.1f);
 }
 
@@ -520,13 +499,12 @@ int main(void){
     bottom=C2D_CreateScreenTarget(GFX_BOTTOM,GFX_LEFT);
     sysFont=C2D_FontLoadSystem(CFG_REGION_USA);
     tBuf=C2D_TextBufNew(4096);
+    initLambTexture();
     bg=C(0.2f,0.5f,0.15f);
     red=C(0.85f,0.05f,0.1f);
     cream=C(0.95f,0.9f,0.8f);
     black=C(0.05f,0.05f,0.05f);
     white=C(1,1,1);
-    grey=C(0.45f,0.42f,0.42f);
-    yellow=C(1,0.85f,0.2f);
 
     while(aptMainLoop()){
         hidScanInput();
@@ -547,6 +525,7 @@ int main(void){
 
     C2D_TextBufDelete(tBuf);
     C2D_FontFree(sysFont);
+    C3D_TexDelete(&lambTex);
     C2D_Fini();
     C3D_Fini();
     gfxExit();
