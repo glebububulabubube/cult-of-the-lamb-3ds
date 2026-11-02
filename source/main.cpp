@@ -55,7 +55,8 @@ static const char* thoughts[] = {
     "loves the lamb","suspicious","sees visions","wants more food"
 };
 static int thoughtCount = 8;
-static float rnd(float a,float b){ return a + (float)rand()/(float)RAND_MAX*(b-a); }
+static void returnToCult(void);
+static void updateDungeon(float dt);
 
 static void drawText(float x,float y,float scale,const char* s,float r,float g,float b){
     C2D_Text txt;
