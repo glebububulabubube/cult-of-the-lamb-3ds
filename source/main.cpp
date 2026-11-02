@@ -56,7 +56,6 @@ static u32 bg, red, cream, black, white;
 static C2D_Font sysFont;
 static C2D_TextBuf tBuf;
 
-// lamb texture objects
 static C3D_Tex lambTex;
 static C2D_Image lambImg;
 static Tex3DS_SubTexture lambSub;
@@ -81,10 +80,10 @@ static void initLambTexture(void){
     C3D_TexFlush(&lambTex);
     lambSub.width  = LAMB_TEX_W;
     lambSub.height = LAMB_TEX_H;
-    lambSub.left   = 0;
-    lambSub.top    = 0;
-    lambSub.u0     = 1.0f;
-    lambSub.v0     = 1.0f;
+    lambSub.left   = 0.0f;
+    lambSub.top    = 0.0f;
+    lambSub.right  = 1.0f;   // was u0
+    lambSub.bottom = 1.0f;   // was v0
     lambImg.tex    = &lambTex;
     lambImg.subtex = &lambSub;
 }
@@ -198,7 +197,6 @@ static void returnToCult(void){
     talkMenuOpen=0;
 }
 
-// draw lamb from texture
 static void drawLambfull(float x,float y,float sc){
     C2D_DrawImageAt(lambImg, x-32*sc, y-32*sc, 0.6f, NULL, sc, sc);
     C2D_DrawCircleSolid(x, y+30*sc, 0.55f, 8*sc, C2D_Color32(0,0,0,90));
