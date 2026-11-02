@@ -1,33 +1,38 @@
-.SUFFIXES:
+name: Build CultLamb
 
-TOPDIR := $(CURDIR)
-include $(DEVKITARM)/3ds_rules
+on:
+  push:
+  workflow_dispatch:
 
-TARGET  := cotl-3ds
-SOURCES := source
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkitarm
+    env:
+      DEVKITPRO: /opt/devkitpro
+      DEVKITARM: /opt/devkitpro/devkitARM
+    steps:
+      - uses: actions/checkout@v4
 
-ARCH := -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
-CFLAGS := -g -O2 -Wall -mword-relocations -ffunction-sections $(ARCH) -I$(CTRULIB)/include -D__3DS__
-CXXFLAGS := -g -O2 -Wall -mword-relocations -ffunction-sections $(ARCH) -I$(CTRULIB)/include -D__3DS__ -fno-rtti -fno-exceptions -std=gnu++11
-LDFLAGS := -specs=3dsx.specs -g $(ARCH)
-LIBS := -lcitro2d -lcitro3d -lctru -lm
+      - name: Install makerom
+        run: |
+          cd /tmp
+          apt-get update -y >/dev/null 2>&1
+          apt-get install -y unzip >/dev/null 2>&1
+          curl -sSL -o makerom.zip https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.18.4/makerom-v0.18.4-ubuntu_x86_64.zip
+          unzip -o makerom.zip >/dev/null
+          mkdir -p /usr/local/bin
+          cp makerom /usr/local/bin/
+          chmod +x /usr/local/bin/makerom
 
-OBJ := main.o
-SMDH := $(TARGET).smdh
+      - name: Build
+        run: make
 
-all: $(TARGET).3dsx
-
-$(TARGET).elf: $(OBJ)
-	$(CXX) $(LDFLAGS) $(OBJ) -L$(CTRULIB)/lib $(LIBS) -o $@
-
-$(TARGET).smdh: $(TARGET).elf
-	smdhtool --create "CultLamb" "Cult of the Lamb demo" "Homebrew" icon.png $@
-
-$(TARGET).3dsx: $(TARGET).elf $(TARGET).smdh
-	3dsxtool $(TARGET).elf $(TARGET).3dsx --smdh=$(TARGET).smdh
-
-main.o: $(SOURCES)/main.cpp
-	$(CXX) -c $(CXXFLAGS) $< -o $@
-
-clean:
-	rm -f *.o *.elf *.smdh *.3dsx *.cia
+      - name: Upload CIA
+        uses: actions/upload-artifact@v4
+        with:
+          name: cotl-3ds-cia
+          path: |
+            cotl-3ds.cia
+          if-no-files-found: error
