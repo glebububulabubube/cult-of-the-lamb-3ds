@@ -10,18 +10,51 @@
 #define SCR_H 240
 #define BOT_W 320
 #define BOT_H 240
+#define WORLD_W 900
+#define WORLD_H 520
 #define MAX_BUILD 16
 #define MAX_FOLLOW 24
-#define ALTAR_R 14
+#define ALTAR_R 16
 #define MAX_ENEMY 8
+
+// ---- music (simple PSG tones) ----
+#define CULT_MELODY_LEN 12
+static const float cultMelody[CULT_MELODY_LEN] = {
+    220, 220, 262, 294, 262, 220, 196, 196, 220, 262, 220, 196
+};
+#define DUNGEON_MELODY_LEN 12
+static const float dungeonMelody[DUNGEON_MELODY_LEN] = {
+    440, 440, 392, 440, 523, 440, 392, 392, 440, 523, 440, 392
+};
+static float musicTimer = 0;
+static int musicIdx = 0;
+static bool musicPlaying = false;
+
+static void playFrequency(float freq){
+    static u32 encodedFreq = 0;
+    encodedFreq = freq * 512;
+    csndPlaySound(PSG_CHANNEL, SOUND_FORMAT_PSG | SOUND_ENABLE | encodedFreq, 32767);
+}
+
+static void updateMusic(bool dungeon){
+    musicTimer += 1.0f/60.0f;
+    if(musicTimer >= 0.35f){
+        musicTimer = 0;
+        float freq = dungeon ? dungeonMelody[musicIdx % DUNGEON_MELODY_LEN]
+                             : cultMelody[musicIdx % CULT_MELODY_LEN];
+        musicIdx++;
+        playFrequency(freq);
+    }
+}
 
 static u32 C(float r,float g,float b){
     return C2D_Color32((int)(r*255),(int)(g*255),(int)(b*255),255);
 }
 
 static float px,py,php,pmaxhp=100.0f;
+static float camx,camy;
 static float bx[MAX_BUILD],by[MAX_BUILD]; static int buildCount;
-static float fwX[MAX_FOLLOW],fwY[MAX_FOLLOW]; static int followCount;
+static float fwX[MAX_FOLLOW],fwY[MAX_FOLLOW],fwT[MAX_FOLLOW]; static int followCount;
 static char fwName[MAX_FOLLOW][24];
 static float altarX,altarY;
 static int score;
@@ -37,7 +70,6 @@ static int enemiesAlive;
 static float dmgCd;
 static float enemyAtkCd;
 static float dmgRed;
-static int roomCleared;
 static int bossDead;
 
 enum GameState { ST_MENU, ST_PLAY, ST_DUNGEON };
@@ -68,6 +100,7 @@ static void drawText(float x,float y,float scale,const char* s,float r,float g,f
 static void addFollower(float x,float y,const char* nm){
     if(followCount>=MAX_FOLLOW) return;
     fwX[followCount]=x; fwY[followCount]=y;
+    fwT[followCount]=rnd(0,6.28f);
     snprintf(fwName[followCount],24,"%s",nm);
     followCount++;
 }
@@ -77,11 +110,12 @@ static void addRandomFollower(float x,float y){
 
 static void startGame(void){
     score=10; buildCount=0; followCount=0;
-    px=SCR_W/2+30; py=SCR_H/2; php=pmaxhp; dmgFlash=0;
-    altarX=SCR_W/2; altarY=SCR_H/2;
-    addRandomFollower(altarX-30, altarY+20);
-    addRandomFollower(altarX+30, altarY+10);
-    addRandomFollower(altarX,     altarY+28);
+    altarX=WORLD_W/2; altarY=WORLD_H/2;
+    px=altarX+40; py=altarY; php=pmaxhp; dmgFlash=0;
+    addRandomFollower(altarX-40, altarY+20);
+    addRandomFollower(altarX+40, altarY+10);
+    addRandomFollower(altarX,     altarY+40);
+    camx=px-SCR_W/2; camy=py-SCR_H/2;
 }
 
 static void buildHouse(float x,float y){
@@ -89,7 +123,14 @@ static void buildHouse(float x,float y){
     if(score<5) return;
     bx[buildCount]=x; by[buildCount]=y; buildCount++;
     score-=5;
-    addRandomFollower(x+rnd(-15,15), y+20);
+    addRandomFollower(x+rnd(-20,20), y+20);
+}
+
+static void updateCamera(void){
+    camx=px-SCR_W/2; camy=py-SCR_H/2;
+    if(camx<0) camx=0; if(camy<0) camy=0;
+    if(camx>WORLD_W-SCR_W) camx=WORLD_W-SCR_W;
+    if(camy>WORLD_H-SCR_H) camy=WORLD_H-SCR_H;
 }
 
 static void spawnEnemy(float x,float y,float hp,float sp,bool boss){
@@ -103,7 +144,7 @@ static void spawnEnemy(float x,float y,float hp,float sp,bool boss){
 static void enterDungeon(void){
     dungeonActive=1; ecount=0; enemiesAlive=0; dungeonBoss=0;
     dpx=SCR_W/2; dpy=SCR_H/2; dmgCd=0; enemyAtkCd=0; dmgRed=0;
-    roomCleared=0; bossDead=0; php=pmaxhp;
+    bossDead=0; php=pmaxhp; musicIdx=0; musicTimer=0;
     spawnEnemy(60,60,30,1.2f,false);
     spawnEnemy(340,60,30,1.3f,false);
     spawnEnemy(60,180,30,1.2f,false);
@@ -124,7 +165,6 @@ static void updateDungeon(float dt){
     if(dpx<12){dpx=12;} if(dpx>DUN_W-12){dpx=DUN_W-12;}
     if(dpy<12){dpy=12;} if(dpy>DUN_H-12){dpy=DUN_H-12;}
 
-    // enemies chase player
     for(int i=0;i<ecount;i++){
         if(ehp[i]<=0) continue;
         float a=atan2f(dpy-ey[i], dpx-ex[i]);
@@ -161,7 +201,7 @@ static void updateDungeon(float dt){
 
     if(enemiesAlive<=0 && !bossDead){
         bossDead=1;
-        addRandomFollower(altarX+rnd(-20,20), altarY+rnd(0,30));
+        addRandomFollower(altarX+rnd(-30,30), altarY+rnd(0,40));
         score+=5;
     }
 }
@@ -170,6 +210,7 @@ static void returnToCult(void){
     state=ST_PLAY;
     dungeonActive=0;
     php=pmaxhp;
+    musicIdx=0; musicTimer=0;
 }
 
 static void drawLambfull(float x,float y,float sc){
@@ -194,41 +235,43 @@ static void drawEnemy(float x,float y,bool boss){
     C2D_DrawRectSolid(x-9*s,y+4*s,0.4f,3*s,9*s, C(0.7f,0.7f,0.8f));
 }
 
-static void drawAltar(void){
-    C2D_DrawCircleSolid(altarX,altarY,0.2f,ALTAR_R, C(0.45f,0.1f,0.1f));
-    C2D_DrawCircleSolid(altarX,altarY,0.21f,ALTAR_R-2, C(0.2f,0.05f,0.05f));
+static void drawAltar(float ox,float oy){
+    float x=altarX-ox, y=altarY-oy;
+    C2D_DrawCircleSolid(x,y,0.2f,ALTAR_R, C(0.45f,0.1f,0.1f));
+    C2D_DrawCircleSolid(x,y,0.21f,ALTAR_R-2, C(0.2f,0.05f,0.05f));
     for(int i=0;i<5;i++){
         float a0=i*2.0f*3.14159f/5.0f - 3.14159f/2.0f;
         float a1=(i+2)*2.0f*3.14159f/5.0f - 3.14159f/2.0f;
-        C2D_DrawLine(altarX+cos(a0)*ALTAR_R, altarY+sin(a0)*ALTAR_R, C(0.9f,0.3f,0.3f),
-                     altarX+cos(a1)*ALTAR_R, altarY+sin(a1)*ALTAR_R, C(0.9f,0.3f,0.3f), 1.0f, 0.5f);
+        C2D_DrawLine(x+cos(a0)*ALTAR_R, y+sin(a0)*ALTAR_R, C(0.9f,0.3f,0.3f),
+                     x+cos(a1)*ALTAR_R, y+sin(a1)*ALTAR_R, C(0.9f,0.3f,0.3f), 1.0f, 0.5f);
     }
-    C2D_DrawCircleSolid(altarX,altarY,0.3f,5, C(1.0f,0.8f,0.2f));
+    C2D_DrawCircleSolid(x,y,0.3f,5, C(1.0f,0.8f,0.2f));
+}
+
+static void drawFollowerWander(float ox,float oy){
     int n=followCount>10?10:followCount;
     for(int i=0;i<n;i++){
-        float ang=(i/(float)10.0f)*2.0f*3.14159f;
-        float kx=altarX+cos(ang)*(ALTAR_R+8);
-        float ky=altarY+sin(ang)*(ALTAR_R+5);
-        C2D_DrawRectSolid(kx-4,ky+2,0.3f,8,9, C(0.75f,0.1f,0.1f));
-        C2D_DrawCircleSolid(kx,ky,0.3f,6, C(0.35f,0.6f,0.25f));
-        C2D_DrawRectSolid(kx-5,ky-2,0.32f,10,3, C(0.95f,0.95f,0.95f));
-        C2D_DrawRectSolid(kx-5,ky+1,0.33f,10,2, C(0.95f,0.95f,0.95f));
-        C2D_DrawTriangle(kx, ky+1, C(0.9f,0.1f,0.1f), kx-2, ky-1, C(0.9f,0.1f,0.1f), kx+2, ky-1, C(0.9f,0.1f,0.1f), 0.35f);
-        drawText(kx-14, ky-14, 0.4f, fwName[i], 1,1,0.6f);
+        float wx=fwX[i]-ox, wy=fwY[i]-oy;
+        C2D_DrawRectSolid(wx-4,wy+2,0.3f,8,9, C(0.75f,0.1f,0.1f));
+        C2D_DrawCircleSolid(wx,wy,0.3f,6, C(0.35f,0.6f,0.25f));
+        C2D_DrawRectSolid(wx-5,wy-2,0.32f,10,3, C(0.95f,0.95f,0.95f));
+        C2D_DrawRectSolid(wx-5,wy+1,0.33f,10,2, C(0.95f,0.95f,0.95f));
+        C2D_DrawTriangle(wx, wy+1, C(0.9f,0.1f,0.1f), wx-2, wy-1, C(0.9f,0.1f,0.1f), wx+2, wy-1, C(0.9f,0.1f,0.1f), 0.35f);
+        drawText(wx-14, wy-14, 0.4f, fwName[i], 1,1,0.6f);
     }
 }
 
-static void drawHouses(void){
+static void drawHouses(float ox,float oy){
     for(int i=0;i<buildCount;i++){
-        float x=bx[i], y=by[i];
+        float x=bx[i]-ox, y=by[i]-oy;
         C2D_DrawTriangle(x,y-14, C(0.7f,0.15f,0.15f), x-14,y, C(0.7f,0.15f,0.15f), x+14,y, C(0.7f,0.15f,0.15f), 0.4f);
         C2D_DrawRectSolid(x-14,y,0.39f,28,16, C(0.8f,0.7f,0.5f));
         C2D_DrawRectSolid(x-4,y+6,0.41f,8,10, C(0.4f,0.25f,0.1f));
     }
 }
 
-static void drawPortal(void){
-    float gx=SCR_W/2, gy=SCR_H-40;
+static void drawPortal(float ox,float oy){
+    float gx=WORLD_W/2 - ox, gy=WORLD_H-60 - oy;
     C2D_DrawCircleSolid(gx,gy,0.2f,16, C(0.4f,0.05f,0.12f));
     C2D_DrawCircleSolid(gx,gy,0.21f,13, C(0.6f,0.1f,0.2f));
     for(int i=0;i<5;i++){
@@ -241,19 +284,24 @@ static void drawPortal(void){
 }
 
 static void drawGame(void){
+    updateCamera();
+    float ox=camx, oy=camy;
     C2D_TargetClear(top, bg);
     C2D_SceneBegin(top);
     C2D_DrawRectSolid(0,0,0,SCR_W,SCR_H, bg);
-    for(int i=0;i<SCR_W;i+=40) C2D_DrawRectSolid(i,0,0.1f,1,SCR_H, C(0,0,0));
-    for(int j=0;j<SCR_H;j+=40) C2D_DrawRectSolid(0,j,0.1f,SCR_W,1, C(0,0,0));
-    for(int i=0;i<8;i++){ float cx=40+i*45, cy=195;
-        C2D_DrawRectSolid(cx-6,cy-5,0.2f,12,10, C(0.6f,0.4f,0.18f));
-        C2D_DrawRectSolid(cx-6,cy-5,0.21f,12,4, C(0.45f,0.3f,0.12f));
-    }
-    drawAltar();
-    drawPortal();
-    drawHouses();
-    drawLambfull(px,py,1.0f);
+    for(int wx=(int)ox/40*40;wx<ox+SCR_W;wx+=40)
+        C2D_DrawRectSolid(wx-ox,0,0.1f,1,SCR_H, C(0,0,0));
+    for(int wy=(int)oy/40*40;wy<oy+SCR_H;wy+=40)
+        C2D_DrawRectSolid(0,wy-oy,0.1f,SCR_W,1, C(0,0,0));
+    C2D_DrawRectSolid(-ox,-oy,0.2f,WORLD_W,4, C(0.4f,0.3f,0.2f));
+    C2D_DrawRectSolid(-ox,WORLD_H-4-oy,0.2f,WORLD_W,4, C(0.4f,0.3f,0.2f));
+    C2D_DrawRectSolid(-ox,-oy,0.2f,4,WORLD_H, C(0.4f,0.3f,0.2f));
+    C2D_DrawRectSolid(WORLD_W-4-ox,-oy,0.2f,4,WORLD_H, C(0.4f,0.3f,0.2f));
+    drawAltar(ox,oy);
+    drawPortal(ox,oy);
+    drawHouses(ox,oy);
+    drawFollowerWander(ox,oy);
+    drawLambfull(px-ox,py-oy,1.0f);
     if(dmgFlash>0) C2D_DrawRectSolid(0,0,0.9f,SCR_W,SCR_H, C2D_Color32(255,0,0,50));
     char h[32]; snprintf(h,32,"Food:%d Cult:%d",score,followCount);
     drawText(8,30,0.5f,h,1,0.85f,0.3f);
@@ -344,6 +392,7 @@ static void drawBottomDungeon(void){
 static void update(float dt){
     tclock+=dt;
     if(state==ST_PLAY){
+        updateMusic(false);  // cult melody
         u32 k=hidKeysHeld();
         float dx=0,dy=0;
         if(k&KEY_CPAD_UP) dy-=1;
@@ -353,25 +402,33 @@ static void update(float dt){
         float len=sqrtf(dx*dx+dy*dy);
         if(len>0){ dx/=len; dy/=len; }
         px+=dx*2.6f*60.f*dt; py+=dy*2.6f*60.f*dt;
-        if(px<15){px=15;} if(px>SCR_W-15){px=SCR_W-15;}
-        if(py<15){py=15;} if(py>SCR_H-15){py=SCR_H-15;}
+        if(px<20){px=20;} if(px>WORLD_W-20){px=WORLD_W-20;}
+        if(py<20){py=20;} if(py>WORLD_H-20){py=WORLD_H-20;}
+        for(int i=0;i<followCount;i++){
+            fwT[i]+=dt*0.6f;
+            fwX[i]+=cosf(fwT[i])*0.6f;
+            fwY[i]+=sinf(fwT[i]*0.9f)*0.6f;
+            if(fwX[i]<20) fwX[i]=20; if(fwX[i]>WORLD_W-20) fwX[i]=WORLD_W-20;
+            if(fwY[i]<20) fwY[i]=20; if(fwY[i]>WORLD_H-20) fwY[i]=WORLD_H-20;
+        }
         touchPosition tp;
         hidTouchRead(&tp);
         static float touchCd=0;
         if(touchCd>0) touchCd-=dt;
         if((tp.px!=0 || tp.py!=0) && touchCd<=0){
-            float gx = (tp.px / (float)BOT_W) * SCR_W;
-            float gy = (tp.py / (float)BOT_H) * SCR_H;
-            buildHouse(gx, gy);
+            float wx = camx + (tp.px / (float)BOT_W) * SCR_W;
+            float wy = camy + (tp.py / (float)BOT_H) * SCR_H;
+            buildHouse(wx, wy);
             touchCd=0.3f;
         }
         static float acc=0; acc+=dt;
         if(acc>2.0f){ acc=0; if(followCount>0) score+= followCount/2 + 1; }
         if(dmgFlash>0) dmgFlash-=dt;
         u32 down=hidKeysDown();
-        float gx=SCR_W/2, gy=SCR_H-40;
-        if((down&KEY_A) && hypotf(gx-px,gy-py)<24){ state=ST_DUNGEON; enterDungeon(); }
+        float gx=WORLD_W/2, gy=WORLD_H-60;
+        if((down&KEY_A) && hypotf(gx-px,gy-py)<30){ state=ST_DUNGEON; enterDungeon(); }
     } else if(state==ST_DUNGEON){
+        updateMusic(true);  // dungeon melody
         updateDungeon(dt);
         u32 down=hidKeysDown();
         if(down&KEY_B){ returnToCult(); }
@@ -393,6 +450,8 @@ static void update(float dt){
 int main(void){
     srand((unsigned)time(NULL));
     gfxInitDefault();
+    c3dInit();      // no
+    csndInit();     // init sound
     C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
     C2D_Init(C2D_DEFAULT_MAX_OBJECTS);
     C2D_Prepare();
@@ -422,6 +481,7 @@ int main(void){
         C3D_FrameEnd(0);
     }
 
+    csndExit();
     C2D_TextBufDelete(tBuf);
     C2D_FontFree(sysFont);
     C2D_Fini();
