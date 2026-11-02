@@ -32,7 +32,7 @@ static float dmgFlash;
 static float dpx,dpy;
 static int dungeonActive;
 static int dungeonBoss;
-static float ex[MAX_ENEMY],ey[MAX_ENEMY],ehp[MAX_ENEMY]; static int ecount;
+static float ex[MAX_ENEMY],ey[MAX_ENEMY],ehp[MAX_ENEMY],espeed[MAX_ENEMY]; static int ecount;
 static int enemiesAlive;
 static float dmgCd;
 static float enemyAtkCd;
@@ -92,9 +92,9 @@ static void buildHouse(float x,float y){
     addRandomFollower(x+rnd(-15,15), y+20);
 }
 
-static void spawnEnemy(float x,float y,float hp,bool boss){
+static void spawnEnemy(float x,float y,float hp,float sp,bool boss){
     if(ecount>=MAX_ENEMY) return;
-    ex[ecount]=x; ey[ecount]=y; ehp[ecount]=hp;
+    ex[ecount]=x; ey[ecount]=y; ehp[ecount]=hp; espeed[ecount]=sp;
     ecount++;
     enemiesAlive++;
     if(boss) dungeonBoss=1;
@@ -104,11 +104,11 @@ static void enterDungeon(void){
     dungeonActive=1; ecount=0; enemiesAlive=0; dungeonBoss=0;
     dpx=SCR_W/2; dpy=SCR_H/2; dmgCd=0; enemyAtkCd=0; dmgRed=0;
     roomCleared=0; bossDead=0; php=pmaxhp;
-    spawnEnemy(60,60,30,false);
-    spawnEnemy(340,60,30,false);
-    spawnEnemy(60,180,30,false);
-    spawnEnemy(200,40,30,false);
-    spawnEnemy(200,200,100,true);
+    spawnEnemy(60,60,30,1.2f,false);
+    spawnEnemy(340,60,30,1.3f,false);
+    spawnEnemy(60,180,30,1.2f,false);
+    spawnEnemy(200,40,30,1.4f,false);
+    spawnEnemy(200,200,100,1.6f,true);
 }
 
 static void updateDungeon(float dt){
@@ -123,6 +123,14 @@ static void updateDungeon(float dt){
     dpx+=dx*2.6f*60.f*dt; dpy+=dy*2.6f*60.f*dt;
     if(dpx<12){dpx=12;} if(dpx>DUN_W-12){dpx=DUN_W-12;}
     if(dpy<12){dpy=12;} if(dpy>DUN_H-12){dpy=DUN_H-12;}
+
+    // enemies chase player
+    for(int i=0;i<ecount;i++){
+        if(ehp[i]<=0) continue;
+        float a=atan2f(dpy-ey[i], dpx-ex[i]);
+        float sp=espeed[i]*60.f*dt;
+        ex[i]+=cos(a)*sp; ey[i]+=sin(a)*sp;
+    }
 
     if(dmgCd>0) dmgCd-=dt;
     u32 down=hidKeysDown();
