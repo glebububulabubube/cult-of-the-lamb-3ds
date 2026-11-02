@@ -17,7 +17,6 @@
 #define ALTAR_R 16
 #define MAX_ENEMY 8
 
-// ---- music (simple PSG tones) ----
 #define CULT_MELODY_LEN 12
 static const float cultMelody[CULT_MELODY_LEN] = {
     220, 220, 262, 294, 262, 220, 196, 196, 220, 262, 220, 196
@@ -28,11 +27,9 @@ static const float dungeonMelody[DUNGEON_MELODY_LEN] = {
 };
 static float musicTimer = 0;
 static int musicIdx = 0;
-static bool musicPlaying = false;
 
 static void playFrequency(float freq){
-    static u32 encodedFreq = 0;
-    encodedFreq = freq * 512;
+    u32 encodedFreq = (u32)(freq * 512);
     csndPlaySound(PSG_CHANNEL, SOUND_FORMAT_PSG | SOUND_ENABLE | encodedFreq, 32767);
 }
 
@@ -128,9 +125,9 @@ static void buildHouse(float x,float y){
 
 static void updateCamera(void){
     camx=px-SCR_W/2; camy=py-SCR_H/2;
-    if(camx<0) camx=0; if(camy<0) camy=0;
-    if(camx>WORLD_W-SCR_W) camx=WORLD_W-SCR_W;
-    if(camy>WORLD_H-SCR_H) camy=WORLD_H-SCR_H;
+    if(camx<0){camx=0;} if(camy<0){camy=0;}
+    if(camx>WORLD_W-SCR_W){camx=WORLD_W-SCR_W;}
+    if(camy>WORLD_H-SCR_H){camy=WORLD_H-SCR_H;}
 }
 
 static void spawnEnemy(float x,float y,float hp,float sp,bool boss){
@@ -392,7 +389,7 @@ static void drawBottomDungeon(void){
 static void update(float dt){
     tclock+=dt;
     if(state==ST_PLAY){
-        updateMusic(false);  // cult melody
+        updateMusic(false);
         u32 k=hidKeysHeld();
         float dx=0,dy=0;
         if(k&KEY_CPAD_UP) dy-=1;
@@ -408,8 +405,8 @@ static void update(float dt){
             fwT[i]+=dt*0.6f;
             fwX[i]+=cosf(fwT[i])*0.6f;
             fwY[i]+=sinf(fwT[i]*0.9f)*0.6f;
-            if(fwX[i]<20) fwX[i]=20; if(fwX[i]>WORLD_W-20) fwX[i]=WORLD_W-20;
-            if(fwY[i]<20) fwY[i]=20; if(fwY[i]>WORLD_H-20) fwY[i]=WORLD_H-20;
+            if(fwX[i]<20){fwX[i]=20;} if(fwX[i]>WORLD_W-20){fwX[i]=WORLD_W-20;}
+            if(fwY[i]<20){fwY[i]=20;} if(fwY[i]>WORLD_H-20){fwY[i]=WORLD_H-20;}
         }
         touchPosition tp;
         hidTouchRead(&tp);
@@ -428,7 +425,7 @@ static void update(float dt){
         float gx=WORLD_W/2, gy=WORLD_H-60;
         if((down&KEY_A) && hypotf(gx-px,gy-py)<30){ state=ST_DUNGEON; enterDungeon(); }
     } else if(state==ST_DUNGEON){
-        updateMusic(true);  // dungeon melody
+        updateMusic(true);
         updateDungeon(dt);
         u32 down=hidKeysDown();
         if(down&KEY_B){ returnToCult(); }
@@ -450,8 +447,7 @@ static void update(float dt){
 int main(void){
     srand((unsigned)time(NULL));
     gfxInitDefault();
-    c3dInit();      // no
-    csndInit();     // init sound
+    csndInit();
     C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
     C2D_Init(C2D_DEFAULT_MAX_OBJECTS);
     C2D_Prepare();
