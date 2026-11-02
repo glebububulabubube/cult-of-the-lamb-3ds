@@ -5,7 +5,6 @@
 #include <math.h>
 #include <string.h>
 #include <time.h>
-#include "lamb_tex.h"
 
 #define SCR_W 400
 #define SCR_H 240
@@ -52,13 +51,9 @@ static float tclock;
 static bool wantExit=false;
 
 static C3D_RenderTarget *top, *bottom;
-static u32 bg, red, cream, black, white;
+static u32 bg, red, cream, black, white, grey, yellow, fur;
 static C2D_Font sysFont;
 static C2D_TextBuf tBuf;
-
-static C3D_Tex lambTex;
-static C2D_Image lambImg;
-static Tex3DS_SubTexture lambSub;
 
 static const char* names[] = {
     "ZEB","MORK","LUG","ROK","SYN","BAR","NAT","VEX",
@@ -74,18 +69,48 @@ static void drawText(float x,float y,float scale,const char* s,float r,float g,f
     C2D_DrawText(&txt, C2D_AlignLeft, x, y, 0.3f, scale, scale, C(r,g,b));
 }
 
-static void initLambTexture(void){
-    C3D_TexInit(&lambTex, LAMB_TEX_W, LAMB_TEX_H, GPU_RGBA8);
-    C3D_TexUpload(&lambTex, lamb_tex);
-    C3D_TexFlush(&lambTex);
-    lambSub.width  = LAMB_TEX_W;
-    lambSub.height = LAMB_TEX_H;
-    lambSub.left   = 0.0f;
-    lambSub.top    = 0.0f;
-    lambSub.right  = 1.0f;   // was u0
-    lambSub.bottom = 1.0f;   // was v0
-    lambImg.tex    = &lambTex;
-    lambImg.subtex = &lambSub;
+// --- detailed procedural lamb based on the picture ---
+static void drawLambfull(float x,float y,float sc){
+    // shadow
+    C2D_DrawCircleSolid(x, y+22*sc, 0.6f, 9*sc, C2D_Color32(0,0,0,90));
+    // legs (grey)
+    C2D_DrawRectSolid(x-9*sc, y+12*sc, 0.3f, 4*sc, 8*sc, grey);
+    C2D_DrawRectSolid(x+5*sc, y+12*sc, 0.3f, 4*sc, 8*sc, grey);
+    // arms (grey)
+    C2D_DrawRectSolid(x-16*sc, y+4*sc, 0.3f, 4*sc, 7*sc, grey);
+    C2D_DrawRectSolid(x+12*sc, y+4*sc, 0.3f, 4*sc, 7*sc, grey);
+    // red cloak body
+    C2D_DrawRectSolid(x-13*sc, y-4*sc, 0.4f, 26*sc, 18*sc, red);
+    // white zigzag trim at cloak bottom
+    for(int i=0;i<5;i++){
+        float zx=x-12*sc+i*6*sc;
+        C2D_DrawRectSolid(zx, y+14*sc, 0.41f, 4*sc, 3*sc, (i%2)? white : C(0.9f,0.9f,0.9f));
+    }
+    // golden bell on chest
+    C2D_DrawCircleSolid(x, y+2*sc, 0.5f, 4*sc, yellow);
+    C2D_DrawCircleSolid(x-1*sc, y+2*sc, 0.6f, 1*sc, black); // skull eye
+    C2D_DrawCircleSolid(x+1*sc, y+2*sc, 0.6f, 1*sc, black);
+    // white fluffy fur behind head
+    for(int i=0;i<12;i++){
+        float a=i*2.0f*3.14159f/12.0f;
+        C2D_DrawCircleSolid(x+cos(a)*12*sc, y-20*sc+sin(a)*8*sc, 0.3f, 5*sc, white);
+    }
+    // head: grey face
+    C2D_DrawCircleSolid(x, y-22*sc, 0.5f, 9*sc, grey);
+    // ears grey
+    C2D_DrawTriangle(x-11*sc, y-27*sc, C(0.6f,0.55f,0.55f), x-7*sc,y-22*sc, C(0.6f,0.55f,0.55f), x-4*sc,y-29*sc, C(0.6f,0.55f,0.55f), 0.5f);
+    C2D_DrawTriangle(x+11*sc, y-27*sc, C(0.6f,0.55f,0.55f), x+7*sc,y-22*sc, C(0.6f,0.55f,0.55f), x+4*sc,y-29*sc, C(0.6f,0.55f,0.55f), 0.5f);
+    // red horns
+    C2D_DrawRectSolid(x-7*sc, y-34*sc, 0.5f, 3*sc, 5*sc, red);
+    C2D_DrawRectSolid(x+4*sc, y-34*sc, 0.5f, 3*sc, 5*sc, red);
+    // eyes black with white highlights
+    C2D_DrawCircleSolid(x-3.5f*sc, y-24*sc, 0.55f, 2*sc, black);
+    C2D_DrawCircleSolid(x+3.5f*sc, y-24*sc, 0.55f, 2*sc, black);
+    C2D_DrawCircleSolid(x-3*sc, y-25*sc, 0.6f, 0.8f*sc, white); // highlight
+    C2D_DrawCircleSolid(x+4*sc, y-25*sc, 0.6f, 0.8f*sc, white);
+    // third eye symbol above head (black crown + red eye)
+    C2D_DrawTriangle(x, y-42*sc, C(0.1f,0.1f,0.1f), x-5*sc,y-36*sc, C(0.1f,0.1f,0.1f), x+5*sc,y-36*sc, C(0.1f,0.1f,0.1f), 0.5f);
+    C2D_DrawCircleSolid(x, y-39*sc, 0.6f, 1.5f*sc, C(1,0,0));
 }
 
 static void addFollower(float x,float y,const char* nm){
@@ -195,11 +220,6 @@ static void returnToCult(void){
     state=ST_PLAY;
     php=pmaxhp;
     talkMenuOpen=0;
-}
-
-static void drawLambfull(float x,float y,float sc){
-    C2D_DrawImageAt(lambImg, x-32*sc, y-32*sc, 0.6f, NULL, sc, sc);
-    C2D_DrawCircleSolid(x, y+30*sc, 0.55f, 8*sc, C2D_Color32(0,0,0,90));
 }
 
 static void drawEnemy(float x,float y,bool boss){
@@ -369,7 +389,7 @@ static void drawMenuTop(void){
         C2D_DrawLine(cx+cos(a0)*R,cy+sin(a0)*R, C(0.9f,0.15f,0.15f),
                      cx+cos(a1)*R,cy+sin(a1)*R, C(0.9f,0.15f,0.15f),3.0f,0.5f);
     }
-    drawLambfull(cx,cy-R-18,1.3f);
+    drawLambfull(cx,cy-R-18,1.6f);
     drawText(40,12,0.8f,"CULT OF THE LAMB",0.9f,0.1f,0.1f);
 }
 
@@ -498,12 +518,14 @@ int main(void){
     bottom=C2D_CreateScreenTarget(GFX_BOTTOM,GFX_LEFT);
     sysFont=C2D_FontLoadSystem(CFG_REGION_USA);
     tBuf=C2D_TextBufNew(4096);
-    initLambTexture();
     bg=C(0.2f,0.5f,0.15f);
     red=C(0.85f,0.05f,0.1f);
     cream=C(0.95f,0.9f,0.8f);
     black=C(0.05f,0.05f,0.05f);
     white=C(1,1,1);
+    grey=C(0.45f,0.42f,0.42f);
+    yellow=C(1,0.85f,0.2f);
+    fur=C(0.95f,0.95f,0.95f);
 
     while(aptMainLoop()){
         hidScanInput();
@@ -524,7 +546,6 @@ int main(void){
 
     C2D_TextBufDelete(tBuf);
     C2D_FontFree(sysFont);
-    C3D_TexDelete(&lambTex);
     C2D_Fini();
     C3D_Fini();
     gfxExit();
