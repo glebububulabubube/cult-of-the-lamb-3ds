@@ -13,6 +13,7 @@
 #define MAX_BUILD 16
 #define MAX_FOLLOW 24
 #define ALTAR_R 14
+#define MAX_ENEMY 8
 
 static u32 C(float r,float g,float b){
     return C2D_Color32((int)(r*255),(int)(g*255),(int)(b*255),255);
@@ -25,11 +26,25 @@ static char fwName[MAX_FOLLOW][24];
 static float altarX,altarY;
 static int score;
 static float dmgFlash;
-static bool wantExit=false;
 
-enum GameState { ST_MENU, ST_PLAY };
+#define DUN_W 400
+#define DUN_H 240
+static float dpx,dpy;
+static int dungeonActive;
+static int dungeonBoss;
+static float ex[MAX_ENEMY],ey[MAX_ENEMY],ehp[MAX_ENEMY]; static int ecount;
+static int enemiesAlive;
+static float dmgCd;
+static float enemyAtkCd;
+static float dmgRed;
+static int roomCleared;
+static int bossDead;
+
+enum GameState { ST_MENU, ST_PLAY, ST_DUNGEON };
 static GameState state = ST_MENU;
 static int menuSel = 0;
+static float tclock;
+static bool wantExit=false;
 
 static C3D_RenderTarget *top, *bottom;
 static u32 bg, red, cream, black, white;
@@ -47,7 +62,7 @@ static void drawText(float x,float y,float scale,const char* s,float r,float g,f
     C2D_Text txt;
     C2D_TextFontParse(&txt, sysFont, tBuf, s);
     C2D_TextOptimize(&txt);
-    C2D_DrawText(&txt, C2D_AlignLeft, x, y, 0.5f, scale, scale, C(r,g,b));
+    C2D_DrawText(&txt, C2D_AlignLeft, x, y, 0.3f, scale, scale, C(r,g,b));
 }
 
 static void addFollower(float x,float y,const char* nm){
@@ -77,45 +92,76 @@ static void buildHouse(float x,float y){
     addRandomFollower(x+rnd(-15,15), y+20);
 }
 
-static void update(float dt){
-    if(state==ST_PLAY){
-        u32 k=hidKeysHeld();
-        float dx=0,dy=0;
-        if(k&KEY_CPAD_UP) dy-=1;
-        if(k&KEY_CPAD_DOWN) dy+=1;
-        if(k&KEY_CPAD_LEFT) dx-=1;
-        if(k&KEY_CPAD_RIGHT) dx+=1;
-        float len=sqrtf(dx*dx+dy*dy);
-        if(len>0){ dx/=len; dy/=len; }
-        px+=dx*2.6f*60.f*dt; py+=dy*2.6f*60.f*dt;
-        if(px<15){px=15;} if(px>SCR_W-15){px=SCR_W-15;}
-        if(py<15){py=15;} if(py>SCR_H-15){py=SCR_H-15;}
-        touchPosition tp;
-        hidTouchRead(&tp);
-        static float touchCd=0;
-        if(touchCd>0) touchCd-=dt;
-        if((tp.px!=0 || tp.py!=0) && touchCd<=0){
-            float gx = (tp.px / (float)BOT_W) * SCR_W;
-            float gy = (tp.py / (float)BOT_H) * SCR_H;
-            buildHouse(gx, gy);
-            touchCd=0.3f;
-        }
-        static float acc=0; acc+=dt;
-        if(acc>2.0f){ acc=0; if(followCount>0) score+= followCount/2 + 1; }
-        if(dmgFlash>0) dmgFlash-=dt;
-    } else if(state==ST_MENU){
-        touchPosition tp;
-        hidTouchRead(&tp);
-        static float mCd=0;
-        if(mCd>0) mCd-=dt;
-        if((tp.px!=0 || tp.py!=0) && mCd<=0){
-            int row = (tp.py - 20) / 50;
-            if(row>=0 && row<4) menuSel = row;
-            if(row==0){ state=ST_PLAY; startGame(); }
-            else if(row==3){ wantExit=true; }
-            mCd=0.3f;
+static void spawnEnemy(float x,float y,float hp,bool boss){
+    if(ecount>=MAX_ENEMY) return;
+    ex[ecount]=x; ey[ecount]=y; ehp[ecount]=hp;
+    ecount++;
+    enemiesAlive++;
+    if(boss) dungeonBoss=1;
+}
+
+static void enterDungeon(void){
+    dungeonActive=1; ecount=0; enemiesAlive=0; dungeonBoss=0;
+    dpx=SCR_W/2; dpy=SCR_H/2; dmgCd=0; enemyAtkCd=0; dmgRed=0;
+    roomCleared=0; bossDead=0; php=pmaxhp;
+    spawnEnemy(60,60,30,false);
+    spawnEnemy(340,60,30,false);
+    spawnEnemy(60,180,30,false);
+    spawnEnemy(200,40,30,false);
+    spawnEnemy(200,200,100,true);
+}
+
+static void updateDungeon(float dt){
+    u32 k=hidKeysHeld();
+    float dx=0,dy=0;
+    if(k&KEY_CPAD_UP) dy-=1;
+    if(k&KEY_CPAD_DOWN) dy+=1;
+    if(k&KEY_CPAD_LEFT) dx-=1;
+    if(k&KEY_CPAD_RIGHT) dx+=1;
+    float len=sqrtf(dx*dx+dy*dy);
+    if(len>0){ dx/=len; dy/=len; }
+    dpx+=dx*2.6f*60.f*dt; dpy+=dy*2.6f*60.f*dt;
+    if(dpx<12){dpx=12;} if(dpx>DUN_W-12){dpx=DUN_W-12;}
+    if(dpy<12){dpy=12;} if(dpy>DUN_H-12){dpy=DUN_H-12;}
+
+    if(dmgCd>0) dmgCd-=dt;
+    u32 down=hidKeysDown();
+    if((down&KEY_A) && dmgCd<=0){
+        dmgCd=0.25f;
+        for(int i=0;i<ecount;i++){
+            if(ehp[i]<=0) continue;
+            if(hypotf(ex[i]-dpx,ey[i]-dpy)<26){
+                ehp[i]-=25;
+                if(ehp[i]<=0){ enemiesAlive--; }
+                break;
+            }
         }
     }
+
+    enemyAtkCd-=dt;
+    if(enemyAtkCd<=0){
+        enemyAtkCd=1.0f;
+        for(int i=0;i<ecount;i++){
+            if(ehp[i]<=0) continue;
+            if(hypotf(ex[i]-dpx,ey[i]-dpy)<20){
+                php-=8; dmgRed=3.0f;
+                if(php<0) php=0;
+            }
+        }
+    }
+    if(dmgRed>0) dmgRed-=dt;
+
+    if(enemiesAlive<=0 && !bossDead){
+        bossDead=1;
+        addRandomFollower(altarX+rnd(-20,20), altarY+rnd(0,30));
+        score+=5;
+    }
+}
+
+static void returnToCult(void){
+    state=ST_PLAY;
+    dungeonActive=0;
+    php=pmaxhp;
 }
 
 static void drawLambfull(float x,float y,float sc){
@@ -130,6 +176,14 @@ static void drawLambfull(float x,float y,float sc){
     C2D_DrawRectSolid(x-13*sc,y-9*sc,0.5f,4*sc,8*sc, black);
     C2D_DrawRectSolid(x+9*sc,y-9*sc,0.5f,4*sc,8*sc, black);
     C2D_DrawCircleSolid(x,y+6*sc,0.55f,3.5f*sc, C(1,0.85f,0.2f));
+}
+
+static void drawEnemy(float x,float y,bool boss){
+    float s = boss?1.6f:1.0f;
+    C2D_DrawRectSolid(x-7*s,y+2*s,0.3f,14*s,16*s, C(0.15f,0.15f,0.15f));
+    C2D_DrawCircleSolid(x,y,0.3f,8*s, C(0.1f,0.1f,0.1f));
+    C2D_DrawRectSolid(x-1*s,y-2*s,0.4f,2*s,6*s, C(1,0,0));
+    C2D_DrawRectSolid(x-9*s,y+4*s,0.4f,3*s,9*s, C(0.7f,0.7f,0.8f));
 }
 
 static void drawAltar(void){
@@ -165,6 +219,19 @@ static void drawHouses(void){
     }
 }
 
+static void drawPortal(void){
+    float gx=SCR_W/2, gy=SCR_H-40;
+    C2D_DrawCircleSolid(gx,gy,0.2f,16, C(0.4f,0.05f,0.12f));
+    C2D_DrawCircleSolid(gx,gy,0.21f,13, C(0.6f,0.1f,0.2f));
+    for(int i=0;i<5;i++){
+        float a0=i*2.0f*3.14159f/5.0f - 3.14159f/2.0f;
+        float a1=(i+2)*2.0f*3.14159f/5.0f - 3.14159f/2.0f;
+        C2D_DrawLine(gx+cos(a0)*13, gy+sin(a0)*13, C(1,0.4f,0.4f),
+                     gx+cos(a1)*13, gy+sin(a1)*13, C(1,0.4f,0.4f), 1.0f, 0.4f);
+    }
+    drawText(gx-30, gy+18, 0.5f, "DUNGEON", 1,0.5f,0.5f);
+}
+
 static void drawGame(void){
     C2D_TargetClear(top, bg);
     C2D_SceneBegin(top);
@@ -176,11 +243,38 @@ static void drawGame(void){
         C2D_DrawRectSolid(cx-6,cy-5,0.21f,12,4, C(0.45f,0.3f,0.12f));
     }
     drawAltar();
+    drawPortal();
     drawHouses();
     drawLambfull(px,py,1.0f);
     if(dmgFlash>0) C2D_DrawRectSolid(0,0,0.9f,SCR_W,SCR_H, C2D_Color32(255,0,0,50));
     char h[32]; snprintf(h,32,"Food:%d Cult:%d",score,followCount);
     drawText(8,30,0.5f,h,1,0.85f,0.3f);
+}
+
+static void drawDungeon(void){
+    C2D_TargetClear(top, C(0.08f,0.05f,0.05f));
+    C2D_SceneBegin(top);
+    C2D_DrawRectSolid(0,0,0,DUN_W,DUN_H, C(0.1f,0.06f,0.06f));
+    for(int i=0;i<DUN_W;i+=32) C2D_DrawRectSolid(i,0,0.1f,1,DUN_H, C(0,0,0));
+    for(int j=0;j<DUN_H;j+=32) C2D_DrawRectSolid(0,j,0.1f,DUN_W,1, C(0,0,0));
+    C2D_DrawRectSolid(0,0,0.2f,DUN_W,4, C(0.4f,0.2f,0.2f));
+    C2D_DrawRectSolid(0,DUN_H-4,0.2f,DUN_W,4, C(0.4f,0.2f,0.2f));
+    C2D_DrawRectSolid(0,0,0.2f,4,DUN_H, C(0.4f,0.2f,0.2f));
+    C2D_DrawRectSolid(DUN_W-4,0,0.2f,4,DUN_H, C(0.4f,0.2f,0.2f));
+    for(int i=0;i<ecount;i++){
+        if(ehp[i]<=0) continue;
+        bool boss = (dungeonBoss && i==ecount-1);
+        drawEnemy(ex[i],ey[i],boss);
+    }
+    drawLambfull(dpx,dpy,1.0f);
+    float mx=DUN_W/2-80, my=12;
+    C2D_DrawRectSolid(mx,my,0.5f,160,8, C(0.2f,0.1f,0.1f));
+    if(bossDead) C2D_DrawRectSolid(mx+1,my+1,0.51f,158,6, C(1,0.3f,0.2f));
+    if(dmgRed>0) C2D_DrawRectSolid(0,0,0.9f,DUN_W,DUN_H, C2D_Color32(255,0,0,60));
+    if(enemiesAlive<=0){
+        char w[40]; snprintf(w,40,"CLEAR! Reward earned");
+        drawText(DUN_W/2-110, DUN_H/2, 0.6f, w, 1,0.9f,0.3f);
+    }
 }
 
 static void drawMenuTop(void){
@@ -197,7 +291,7 @@ static void drawMenuTop(void){
                      cx+cos(a1)*R, cy+sin(a1)*R, C(0.9f,0.15f,0.15f), 3.0f, 0.5f);
     }
     drawLambfull(cx, cy-R-18, 1.3f);
-    drawText(100, 12, 0.8f, "CULT OF THE LAMB", 0.9f,0.1f,0.1f);
+    drawText(40, 12, 0.8f, "CULT OF THE LAMB", 0.9f,0.1f,0.1f);
 }
 
 static void drawBottomMenu(void){
@@ -229,6 +323,65 @@ static void drawBottomGame(void){
     drawText(120,100,0.5f,"TAP TO BUILD",1,0.9f,0.4f);
 }
 
+static void drawBottomDungeon(void){
+    C2D_TargetClear(bottom, C(0.08f,0.04f,0.04f));
+    C2D_SceneBegin(bottom);
+    C2D_DrawRectSolid(0,0,0,BOT_W,BOT_H, C(0.1f,0.05f,0.05f));
+    drawText(30,20,0.6f,"A = FIGHT",1,0.6f,0.5f);
+    drawText(30,60,0.6f,"B = leave",1,0.6f,0.5f);
+    char h[40]; snprintf(h,40,"HP %d",(int)php);
+    drawText(30,100,0.6f,h,1,0.8f,0.4f);
+}
+
+static void update(float dt){
+    tclock+=dt;
+    if(state==ST_PLAY){
+        u32 k=hidKeysHeld();
+        float dx=0,dy=0;
+        if(k&KEY_CPAD_UP) dy-=1;
+        if(k&KEY_CPAD_DOWN) dy+=1;
+        if(k&KEY_CPAD_LEFT) dx-=1;
+        if(k&KEY_CPAD_RIGHT) dx+=1;
+        float len=sqrtf(dx*dx+dy*dy);
+        if(len>0){ dx/=len; dy/=len; }
+        px+=dx*2.6f*60.f*dt; py+=dy*2.6f*60.f*dt;
+        if(px<15){px=15;} if(px>SCR_W-15){px=SCR_W-15;}
+        if(py<15){py=15;} if(py>SCR_H-15){py=SCR_H-15;}
+        touchPosition tp;
+        hidTouchRead(&tp);
+        static float touchCd=0;
+        if(touchCd>0) touchCd-=dt;
+        if((tp.px!=0 || tp.py!=0) && touchCd<=0){
+            float gx = (tp.px / (float)BOT_W) * SCR_W;
+            float gy = (tp.py / (float)BOT_H) * SCR_H;
+            buildHouse(gx, gy);
+            touchCd=0.3f;
+        }
+        static float acc=0; acc+=dt;
+        if(acc>2.0f){ acc=0; if(followCount>0) score+= followCount/2 + 1; }
+        if(dmgFlash>0) dmgFlash-=dt;
+        u32 down=hidKeysDown();
+        float gx=SCR_W/2, gy=SCR_H-40;
+        if((down&KEY_A) && hypotf(gx-px,gy-py)<24){ state=ST_DUNGEON; enterDungeon(); }
+    } else if(state==ST_DUNGEON){
+        updateDungeon(dt);
+        u32 down=hidKeysDown();
+        if(down&KEY_B){ returnToCult(); }
+    } else if(state==ST_MENU){
+        touchPosition tp;
+        hidTouchRead(&tp);
+        static float mCd=0;
+        if(mCd>0) mCd-=dt;
+        if((tp.px!=0 || tp.py!=0) && mCd<=0){
+            int row = (tp.py - 20) / 50;
+            if(row>=0 && row<4) menuSel = row;
+            if(row==0){ state=ST_PLAY; startGame(); }
+            else if(row==3){ wantExit=true; }
+            mCd=0.3f;
+        }
+    }
+}
+
 int main(void){
     srand((unsigned)time(NULL));
     gfxInitDefault();
@@ -250,13 +403,13 @@ int main(void){
         u32 down=hidKeysDown();
         if(down&KEY_START) break;
         if(wantExit) break;
-        if(state==ST_PLAY && (down&KEY_B)){ state=ST_MENU; }
 
         update(1.0f/60.0f);
 
         C2D_TextBufClear(tBuf);
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
         if(state==ST_PLAY){ drawGame(); drawBottomGame(); }
+        else if(state==ST_DUNGEON){ drawDungeon(); drawBottomDungeon(); }
         else { drawMenuTop(); drawBottomMenu(); }
         C3D_FrameEnd(0);
     }
