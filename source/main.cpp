@@ -41,7 +41,6 @@ static const char* names[] = {
     "KRO","MAL","ZOR","GNA","THU","FEN","ORY","SAL","VUL","IX"
 };
 static int nameCount = 18;
-
 static float rnd(float a,float b){ return a + (float)rand()/(float)RAND_MAX*(b-a); }
 
 static void drawText(float x,float y,float scale,const char* s,float r,float g,float b){
@@ -76,7 +75,6 @@ static void buildHouse(float x,float y){
     bx[buildCount]=x; by[buildCount]=y; buildCount++;
     score-=5;
     addRandomFollower(x+rnd(-15,15), y+20);
-
 }
 
 static void update(float dt){
@@ -154,7 +152,7 @@ static void drawAltar(void){
         C2D_DrawRectSolid(kx-5,ky-2,0.32f,10,3, C(0.95f,0.95f,0.95f));
         C2D_DrawRectSolid(kx-5,ky+1,0.33f,10,2, C(0.95f,0.95f,0.95f));
         C2D_DrawTriangle(kx, ky+1, C(0.9f,0.1f,0.1f), kx-2, ky-1, C(0.9f,0.1f,0.1f), kx+2, ky-1, C(0.9f,0.1f,0.1f), 0.35f);
-        drawText(kx-14, ky-12, 0.5f, fwName[i], 1,1,0.6f);
+        drawText(kx-14, ky-14, 0.4f, fwName[i], 1,1,0.6f);
     }
 }
 
@@ -181,12 +179,8 @@ static void drawGame(void){
     drawHouses();
     drawLambfull(px,py,1.0f);
     if(dmgFlash>0) C2D_DrawRectSolid(0,0,0.9f,SCR_W,SCR_H, C2D_Color32(255,0,0,50));
-    C2D_DrawRectSolid(6,6,0.5f,54,10, C(0.2f,0.15f,0.1f));
-    C2D_DrawRectSolid(8,8,0.5f, (score>50?50:score),8, C(1,0.85f,0.3f));
-    C2D_DrawRectSolid(6,20,0.5f,54,8, C(0.2f,0.15f,0.1f));
-    C2D_DrawRectSolid(8,22,0.5f, (followCount>50?50:followCount*2),6, C(0.7f,0.8f,0.9f));
-    char h[24]; snprintf(h,24,"Food:%d Cult:%d",score,followCount);
-    drawText(70,4,0.5f,h,1,0.85f,0.3f);
+    char h[32]; snprintf(h,32,"Food:%d Cult:%d",score,followCount);
+    drawText(8,30,0.5f,h,1,0.85f,0.3f);
 }
 
 static void drawMenuTop(void){
@@ -202,15 +196,15 @@ static void drawMenuTop(void){
         C2D_DrawLine(cx+cos(a0)*R, cy+sin(a0)*R, C(0.9f,0.15f,0.15f),
                      cx+cos(a1)*R, cy+sin(a1)*R, C(0.9f,0.15f,0.15f), 3.0f, 0.5f);
     }
-    drawLambfull(cx, cy-R-18, 1.4f);
-    drawText(110, 12, 0.9f, "CULT OF THE LAMB", 0.9f,0.1f,0.1f);
+    drawLambfull(cx, cy-R-18, 1.3f);
+    drawText(100, 12, 0.8f, "CULT OF THE LAMB", 0.9f,0.1f,0.1f);
 }
 
 static void drawBottomMenu(void){
     C2D_TargetClear(bottom, black);
     C2D_SceneBegin(bottom);
     C2D_DrawRectSolid(0,0,0,BOT_W,BOT_H, black);
-    drawText(60,6,0.6f,"CULT OF THE LAMB",1,0.2f,0.2f);
+    drawText(60,6,0.55f,"CULT OF THE LAMB",1,0.2f,0.2f);
     const char* items[4]={"PLAY","SETTINGS","CREDITS","EXIT"};
     for(int i=0;i<4;i++){
         int y=45+i*50;
@@ -219,7 +213,6 @@ static void drawBottomMenu(void){
         } else {
             C2D_DrawRectSolid(30,y-4,0.3f,260,30, C(0.18f,0.12f,0.1f));
         }
-        u32 col = (i==menuSel)?C(1,0.85f,0.3f):C(0.9f,0.9f,0.9f);
         float cr=(i==menuSel)?1.0f:0.9f, cg=(i==menuSel)?0.85f:0.9f, cb=(i==menuSel)?0.3f:0.9f;
         drawText(60, y-2, 0.6f, items[i], cr,cg,cb);
     }
@@ -233,8 +226,7 @@ static void drawBottomGame(void){
     for(int j=0;j<BOT_H;j+=32) C2D_DrawRectSolid(0,j,0.1f,BOT_W,1, C(0,0,0));
     C2D_DrawTriangle(160,100, C(0.8f,0.3f,0.3f), 146,112, C(0.8f,0.3f,0.3f), 174,112, C(0.8f,0.3f,0.3f), 0.6f);
     C2D_DrawRectSolid(148,112,0.59f,26,12, C(0.85f,0.75f,0.55f));
-    drawText(110,100,0.5f,"TAP TO BUILD",1,0.9f,0.4f);
-    drawText(60,175,0.5f,"Food bar",1,0.85f,0.3f);
+    drawText(120,100,0.5f,"TAP TO BUILD",1,0.9f,0.4f);
 }
 
 int main(void){
@@ -245,7 +237,7 @@ int main(void){
     C2D_Prepare();
     top = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
     bottom = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
-    sysFont = C2D_FontLoadSystem();
+    sysFont = C2D_FontLoadSystem(CFG_REGION_US);
     tBuf = C2D_TextBufNew(4096);
     bg = C(0.16f,0.11f,0.08f);
     red = C(0.85f,0.05f,0.1f);
@@ -270,7 +262,7 @@ int main(void){
     }
 
     C2D_TextBufDelete(tBuf);
-    C2D_FontUnload(sysFont);
+    C2D_FontFree(sysFont);
     C2D_Fini();
     C3D_Fini();
     gfxExit();
