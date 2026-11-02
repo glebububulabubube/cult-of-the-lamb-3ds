@@ -237,7 +237,7 @@ int main(void){
     C2D_Prepare();
     top = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
     bottom = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
-    sysFont = C2D_FontLoadSystem(CFG_REGION_US);
+    sysFont = C2D_FontLoadSystem(CFG_REGION_USA);
     tBuf = C2D_TextBufNew(4096);
     bg = C(0.16f,0.11f,0.08f);
     red = C(0.85f,0.05f,0.1f);
