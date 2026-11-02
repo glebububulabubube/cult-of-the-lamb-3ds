@@ -39,6 +39,7 @@ static void drawHouses(float ox,float oy);
 static void drawGrassBg(void);
 static void drawTalkTop(void);
 static void doTalkAction(int action);
+static void doTempleAction(int action);
 static void updateTemple(float dt);
 static void drawTempleTop(void);
 static void drawTempleBottom(void);
@@ -59,6 +60,9 @@ static int talkMenuSel;
 static int talkMenuOpen;
 static int buildSel;
 static int buildFailMsg;
+static float tPx,tPy,tCamx,tCamy,tAltarX,tAltarY;
+static int templeSel;
+static int templeUiDisp;
 
 enum GameState { ST_MENU, ST_PLAY, ST_DUNGEON, ST_TALK, ST_TEMPLE };
 static GameState state = ST_MENU;
@@ -66,8 +70,6 @@ static int menuSel = 0;
 static float tclock;
 static bool wantExit=false;
 static float ritualCd;
-static int templeSel;
-static int templeUiDisp;
 
 static C3D_RenderTarget *top, *bottom;
 static u32 bg, red, cream, black, white, grey, yellow;
@@ -80,8 +82,6 @@ static const char* names[] = {
 };
 static int nameCount = 18;
 static float rnd(float a,float b){ return a + (float)rand()/(float)RAND_MAX*(b-a); }
-
-static float tPx,tPy,tCamx,tCamy,tAltarX,tAltarY;
 
 static void drawText(float x,float y,float scale,const char* s,float r,float g,float b){
     C2D_Text txt;
@@ -274,12 +274,12 @@ static void drawBuilding(float wx,float wy,int type){
         C2D_DrawCircleSolid(x,y-3,0.41f,4, C(1,0.4f,0.6f));
         C2D_DrawCircleSolid(x-3,y-1,0.41f,2, C(1,0.9f,0.3f));
     } else { // type 4 temple - BIG building
-        float s=2.6f; // bigger than lamb
+        float s=2.6f;
         C2D_DrawTriangle(x,y-34*s, C(0.5f,0.1f,0.55f), x-26*s,y-16, C(0.5f,0.1f,0.55f), x+26*s,y-16, C(0.5f,0.1f,0.55f),0.4f);
         C2D_DrawRectSolid(x-26*s,y-16,0.39f,52*s,6, C(0.35f,0.1f,0.4f));
         C2D_DrawRectSolid(x-26*s,y-10,0.39f,52*s,34, C(0.3f,0.08f,0.35f));
-        C2D_DrawRectSolid(x-8,y-2,0.41f,16,26, C(0.15f,0.04f,0.2f)); // door
-        C2D_DrawCircleSolid(x,y-22,0.44f,4, C(1,0.85f,0.2f)); // window light
+        C2D_DrawRectSolid(x-8,y-2,0.41f,16,26, C(0.15f,0.04f,0.2f));
+        C2D_DrawCircleSolid(x,y-22,0.44f,4, C(1,0.85f,0.2f));
         C2D_DrawRectSolid(x-6,y-42,0.43f,12,3, C(0.25f,0.06f,0.4f));
     }
 }
@@ -427,7 +427,7 @@ static void drawDungeon(void){
     }
 }
 
-// ---- TEMPLE INTERIOR (walkable location) ----
+// ---- TEMPLE INTERIOR ----
 static void enterTemple(void){
     tPx=TEMPLE_W/2; tPy=TEMPLE_H-80;
     tAltarX=TEMPLE_W/2; tAltarY=TEMPLE_H/2;
@@ -446,23 +446,34 @@ static void updateTemple(float dt){
     tPx+=dx*2.6f*60.f*dt; tPy+=dy*2.6f*60.f*dt;
     if(tPx<40){tPx=40;} if(tPx>TEMPLE_W-40){tPx=TEMPLE_W-40;}
     if(tPy<40){tPy=40;} if(tPy>TEMPLE_H-40){tPy=TEMPLE_H-40;}
-    // near altar
     float da=hypotf(tAltarX-tPx,tAltarY-tPy);
     if(da<40) templeUiDisp=1; else templeUiDisp=0;
-    templeSel=0;
-    // exit if near bottom door
     u32 down=hidKeysDown();
     if((down&KEY_B)||(down&KEY_A&&tPy>TEMPLE_H-70&&da>50)){ state=ST_PLAY; }
+    if(templeUiDisp){
+        static float tc=0; if(tc>0)tc-=dt;
+        if(down&KEY_DUP|KEY_CPAD_UP) templeSel=(templeSel+2)%3;
+        if(down&KEY_DDOWN|KEY_CPAD_DOWN) templeSel=(templeSel+1)%3;
+        touchPosition tp; hidTouchRead(&tp);
+        if((tp.px!=0||tp.py!=0)&&tc<=0){
+            int row=(tp.py-30)/60;
+            if(row==0) doTempleAction(0);
+            else if(row==1) doTempleAction(1);
+            else if(row==2) doTempleAction(2);
+            tc=0.3f;
+        }
+        if(down&KEY_A){ doTempleAction(templeSel); }
+    }
 }
 
 static void drawTempleTop(void){
     tCamx=tPx-SCR_W/2; tCamy=tPy-SCR_H/2;
-    if(tCamx<0)tCamx=0; if(tCamy<0)tCamy=0;
+    if(tCamx<0)tCamx=0;
+    if(tCamy<0)tCamy=0;
     if(tCamx>TEMPLE_W-SCR_W)tCamx=TEMPLE_W-SCR_W;
     if(tCamy>TEMPLE_H-SCR_H)tCamy=TEMPLE_H-SCR_H;
     C2D_TargetClear(top, C(0.18f,0.07f,0.28f));
     C2D_SceneBegin(top);
-    // floor
     C2D_DrawRectSolid(0,0,0,SCR_W,SCR_H, C(0.4f,0.2f,0.4f));
     for(int i=0;i<200;i++){
         float fx=((i*73)% (TEMPLE_W+8))-tCamx;
@@ -470,8 +481,6 @@ static void drawTempleTop(void){
         if(fx<-10||fx>SCR_W+10||fy<-10||fy>SCR_H+10) continue;
         C2D_DrawRectSolid(fx,fy,0.05f,2,3, C(0.5f,0.25f,0.5f));
     }
-    // walls drawn based on camera
-    // draw columns
     for(int i=0;i<8;i++){
         float cx2=80+i*120;
         float cy2=160;
@@ -480,7 +489,6 @@ static void drawTempleTop(void){
         C2D_DrawRectSolid(sx-6,sy,0.3f,12,120, C(0.3f,0.25f,0.45f));
         C2D_DrawCircleSolid(sx,sy,0.4f,8, C(0.35f,0.3f,0.5f));
     }
-    // benches
     for(int i=0;i<4;i++){
         float bx2=140+i*200;
         float by2=100;
@@ -489,7 +497,6 @@ static void drawTempleTop(void){
         C2D_DrawRectSolid(sx-20,sy,0.3f,40,18, C(0.4f,0.3f,0.3f));
         C2D_DrawRectSolid(sx-20,sy+14,0.31f,40,4, C(0.3f,0.2f,0.2f));
     }
-    // big altar at center
     float ax=tAltarX-tCamx, ay=tAltarY-tCamy;
     C2D_DrawCircleSolid(ax,ay,0.2f,40, C(0.55f,0.1f,0.1f));
     C2D_DrawCircleSolid(ax,ay,0.21f,32, C(0.25f,0.05f,0.05f));
@@ -502,9 +509,7 @@ static void drawTempleTop(void){
     C2D_DrawCircleSolid(ax,ay,0.3f,8, C(1.0f,0.8f,0.2f));
     drawText(ax-40,ay+44,0.5f,"THE ALTAR",1,0.8f,0.4f);
     if(templeUiDisp) drawText(ax-20,ay-60,0.5f,"A to act",1,0.9f,0.4f);
-    // paper player
     drawLambfull(tPx-tCamx,tPy-tCamy,1.0f);
-    // door indicator bottom
     drawText(SCR_W/2-60,SCR_H-20,0.5f,"walk to door, B=leave",0.9f,0.8f,0.6f);
 }
 
@@ -521,22 +526,6 @@ static void drawTempleBottom(void){
             float cr=(i==templeSel)?1.0f:0.9f;
             drawText(60,y,0.55f,acts[i],cr,0.9f,0.9f);
         }
-        touchPosition tp;
-        hidTouchRead(&tp);
-        u32 down=hidKeysDown();
-        if(down&KEY_A){} // action handled on select below
-        // tap selection
-        static float tc=0; if(tc>0)tc-=dt;
-        if((tp.px!=0||tp.py!=0)&&tc<=0){
-            int row=(tp.py-30)/60;
-            if(row==0) doTempleAction(0);
-            else if(row==1) doTempleAction(1);
-            else if(row==2) doTempleAction(2);
-            tc=0.3f;
-        }
-        if(down&(KEY_DUP|KEY_CPAD_UP)) templeSel=(templeSel+2)%3;
-        if(down&(KEY_DDOWN|KEY_CPAD_DOWN)) templeSel=(templeSel+1)%3;
-        if(down&KEY_A){ doTempleAction(templeSel); }
     } else {
         drawText(20,30,0.6f,"Move: circle pad",1,0.9f,0.4f);
         drawText(20,60,0.6f,"A: action",1,0.9f,0.4f);
