@@ -110,6 +110,8 @@ static const char* bossName(void){
 }
 
 static void saveGame(void){
+    // ensure folder exists
+    mkdir("sdmc:/cultlamb");
     FILE* f=fopen(SAVE_PATH,"wb");
     if(!f) return;
     int n=followCount;
@@ -904,6 +906,7 @@ static void update(float dt){
 
 int main(void){
     srand((unsigned)time(NULL));
+    sdmcInit();
     gfxInitDefault();
     C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
     C2D_Init(C2D_DEFAULT_MAX_OBJECTS);
@@ -941,5 +944,6 @@ int main(void){
     C2D_Fini();
     C3D_Fini();
     gfxExit();
+    sdmcExit();
     return 0;
 }
