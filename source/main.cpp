@@ -78,7 +78,6 @@ static int menuSel = 0;
 static float tclock;
 static bool wantExit=false;
 
-// dungeon state
 static float dpx,dpy;
 static int dTheme,dRoom;
 static float exd[MAX_ENEMY],eyd[MAX_ENEMY],ehpz[MAX_ENEMY],espd[MAX_ENEMY];
@@ -131,6 +130,10 @@ static void drawLambfull(float x,float y,float sc){
     C2D_DrawRectSolid(x-9*sc, y-33*sc, 0.52f, 3*sc, 5*sc, black);
     C2D_DrawRectSolid(x+6*sc, y-33*sc, 0.52f, 3*sc, 5*sc, black);
     C2D_DrawCircleSolid(x, y-26*sc, 0.6f, 2.5f*sc, C(1,0,0));
+    // sword in right hand
+    C2D_DrawRectSolid(x+8*sc, y-8*sc, 0.55f, 3*sc, 12*sc, C(0.85f,0.88f,0.95f));
+    C2D_DrawTriangle(x+9.5f*sc, y-22*sc, C(0.92f,0.94f,0.98f), x+7*sc,y-8*sc, C(0.92f,0.94f,0.98f), x+12*sc,y-8*sc, C(0.92f,0.94f,0.98f),0.56f);
+    C2D_DrawRectSolid(x+6*sc, y-9*sc, 0.57f, 9*sc, 3*sc, C(0.65f,0.5f,0.2f));
 }
 
 static void addFollower(float x,float y,const char* nm){
@@ -369,7 +372,6 @@ static void drawHubTop(void){
         float fx=(i*61)% SCR_W, fy=(i*83)% SCR_H;
         C2D_DrawRectSolid(fx,fy,0.1f,2,2, C(0.22f,0.18f,0.28f));
     }
-    // 4 doors
     struct { float x,y; const char* t; u32 col; } dr[4] = {
         {110,70,"FOREST", C(0.2f,0.5f,0.2f)},
         {290,70,"WATER",  C(0.2f,0.4f,0.75f)},
@@ -382,7 +384,6 @@ static void drawHubTop(void){
         C2D_DrawRectSolid(dr[i].x-10,dr[i].y-18,0.22f,20,36, C(0.03f,0.02f,0.04f));
         drawText(dr[i].x-26,dr[i].y+32,0.4f,dr[i].t,0.95f,0.95f,0.95f);
     }
-    // exit back to cult
     C2D_DrawRectSolid(176,218,0.2f,48,20, C(0.35f,0.25f,0.2f));
     drawText(185,226,0.4f,"BACK",1,0.85f,0.7f);
     drawLambfull(hx,hy,1.0f);
@@ -397,7 +398,7 @@ static void drawHubBottom(void){
     drawText(30,110,0.6f,"B: back to cult",1,0.9f,0.4f);
 }
 
-// ==== DUNGEON ROOMS (Binding of Isaac style) ====
+// ==== DUNGEON ROOMS ====
 static void loadRoom(void){
     for(int i=0;i<MAX_ENEMY;i++){ exd[i]=eyd[i]=ehpz[i]=0; }
     dEnemyCount=0; dEnemies=0;
@@ -433,7 +434,9 @@ static void updateDungeon(float dt){
     float len=sqrtf(dx*dx+dy*dy);
     if(len>0){ dx/=len; dy/=len; }
     dpx+=dx*2.6f*60.f*dt; dpy+=dy*2.6f*60.f*dt;
-    if(dpx<10){dpx=10;} if(dpx>SCR_W-10){dpx=SCR_W-10;}
+    int doorZone=26;
+    if(dEnemies>0){ if(dpx<doorZone)dpx=doorZone; if(dpx>SCR_W-doorZone)dpx=SCR_W-doorZone; }
+    else { if(dpx<0)dpx=0; if(dpx>SCR_W)dpx=SCR_W; }
     if(dpy<10){dpy=10;} if(dpy>SCR_H-10){dpy=SCR_H-10;}
     for(int i=0;i<dEnemyCount;i++){
         if(ehpz[i]<=0) continue;
@@ -461,19 +464,14 @@ static void updateDungeon(float dt){
         }
     }
     if(dRed>0) dRed-=dt;
-    // door logic
-    if(dpx<8 && dEnemies<=0){ enterHub(); return; }  // back door
-    if(dpx>SCR_W-8 && dEnemies<=0){
-        if(dRoom<DUNGEON_ROOMS-1){ dRoom++; loadRoom(); }
-        else {
-            score+=12;
-            addRandomFollower(altarX+rnd(-30,30), altarY+rnd(0,40));
-            enterHub();
+    if(dEnemies<=0){
+        if(dpx<20){ enterHub(); return; }
+        if(dpx>SCR_W-20){
+            if(dRoom<DUNGEON_ROOMS-1){ dRoom++; loadRoom(); }
+            else { score+=12; addRandomFollower(altarX+rnd(-30,30),altarY+rnd(0,40)); enterHub(); }
+            return;
         }
-        return;
     }
-    if(dpx<8 && dEnemies>0){ dpx=10; }
-    if(dpx>SCR_W-8 && dEnemies>0){ dpx=SCR_W-10; }
 }
 static void drawEnemy(float x,float y){
     u32 zc;
@@ -516,22 +514,18 @@ static void drawDungeonTop(void){
         float fx=(i*53)% SCR_W, fy=(i*79)% SCR_H;
         C2D_DrawRectSolid(fx,fy,0.1f,2,2, C(0.3f,0.3f,0.3f));
     }
-    // back door (left, always open)
     C2D_DrawRectSolid(0,100,0.2f,14,70, C(0.5f,0.35f,0.2f));
     drawText(2,120,0.4f,"<",1,0.9f,0.9f);
-    // next door (right) - open when cleared
     if(dEnemies<=0){
         C2D_DrawRectSolid(SCR_W-14,100,0.2f,14,70, C(0.2f,0.7f,0.3f));
         drawText(SCR_W-12,120,0.4f,">",1,1,1);
     } else {
         C2D_DrawRectSolid(SCR_W-14,100,0.2f,14,70, C(0.4f,0.15f,0.1f));
     }
-    // room number & theme label
     char rlabel[48];
     const char* tn[4]={"FOREST","WATER","SPIDERS","TOADS"};
     snprintf(rlabel,48,"%s - Room %d/%d", tn[dTheme], dRoom+1, DUNGEON_ROOMS);
     drawText(6,6,0.5f,rlabel,1,0.9f,0.4f);
-    // enemies
     bool bossRoom=(dRoom==DUNGEON_ROOMS-1);
     for(int i=0;i<dEnemyCount;i++){
         if(ehpz[i]<=0) continue;
@@ -540,7 +534,6 @@ static void drawDungeonTop(void){
     }
     drawLambfull(dpx,dpy,0.8f);
     if(dRed>0) C2D_DrawRectSolid(0,0,0.9f,SCR_W,SCR_H, C2D_Color32(255,0,0,60));
-    // boss HP bar
     if(bossRoom && dEnemies>0){
         float mx=SCR_W/2-80, my=22;
         C2D_DrawRectSolid(mx,my,0.5f,160,10, C(0.15f,0.05f,0.05f));
@@ -554,7 +547,7 @@ static void drawDungeonBottom(void){
     C2D_SceneBegin(bottom);
     C2D_DrawRectSolid(0,0,0,BOT_W,BOT_H, C(0.1f,0.05f,0.05f));
     drawText(30,20,0.6f,"A = FIGHT",1,0.6f,0.5f);
-    drawText(30,60,0.6f,"B = nobody once clear",1,0.6f,0.5f);
+    drawText(30,60,0.6f,"B = run away",1,0.6f,0.5f);
     char h[40]; snprintf(h,40,"HP %d  Enemies %d",(int)php,dEnemies);
     drawText(30,100,0.6f,h,1,0.8f,0.4f);
 }
@@ -768,10 +761,8 @@ static void update(float dt){
         if(dmgFlash>0) dmgFlash-=dt;
         u32 down=hidKeysDown();
         bool acted=false;
-        // top gate -> dungeon hall
         float gx=WORLD_W/2, gy=20;
         if((down&KEY_A)&&hypotf(gx-px,gy-py)<40){ enterHub(); state=ST_DUNGEONHUB; acted=true; }
-        // temple
         if(!acted && (down&KEY_A) && hasTemple){
             for(int i=0;i<buildCount;i++){
                 if((int)btype[i]==4){
