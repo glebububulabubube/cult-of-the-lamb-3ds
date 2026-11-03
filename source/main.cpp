@@ -44,6 +44,9 @@ static void updateTemple(float dt);
 static void drawTempleTop(void);
 static void drawTempleBottom(void);
 static void enterTemple(void);
+static void drawSplashTop(void);
+static void drawSplashBottom(void);
+static void updateSplash(float dt);
 
 static float px,py,php,pmaxhp=100.0f;
 static float camx,camy;
@@ -63,9 +66,10 @@ static int buildFailMsg;
 static float tPx,tPy,tCamx,tCamy,tAltarX,tAltarY;
 static int templeSel;
 static int templeUiDisp;
+static float splashTime;
 
-enum GameState { ST_MENU, ST_PLAY, ST_DUNGEON, ST_TALK, ST_TEMPLE };
-static GameState state = ST_MENU;
+enum GameState { ST_SPLASH, ST_MENU, ST_PLAY, ST_DUNGEON, ST_TALK, ST_TEMPLE };
+static GameState state = ST_SPLASH;
 static int menuSel = 0;
 static float tclock;
 static bool wantExit=false;
@@ -88,6 +92,89 @@ static void drawText(float x,float y,float scale,const char* s,float r,float g,f
     C2D_TextFontParse(&txt, sysFont, tBuf, s);
     C2D_TextOptimize(&txt);
     C2D_DrawText(&txt, C2D_AlignLeft, x, y, 0.3f, scale, scale, C(r,g,b));
+}
+
+// ---- SPLASH SCREENS ----
+static void updateSplash(float dt){
+    splashTime+=dt;
+    if(splashTime>5.0f) state=ST_MENU;
+}
+
+static void drawSplashTop(void){
+    C2D_TargetClear(top, black);
+    C2D_SceneBegin(top);
+    if(splashTime<2.5f){
+        // ----- PHASE 1: massive monster -----
+        C2D_DrawRectSolid(0,0,0,SCR_W,SCR_H, C(0.05f,0.02f,0.02f));
+        float cx=SCR_W/2, cy=SCR_H/2;
+        // body
+        C2D_DrawRectSolid(cx-60,cy-20,0.3f,120,70, C(0.12f,0.06f,0.06f));
+        C2D_DrawTriangle(cx-70,cy+50, C(0.12f,0.06f,0.06f), cx-95,cy+90, C(0.1f,0.05f,0.05f), cx-20,cy+90, C(0.12f,0.06f,0.06f),0.3f);
+        C2D_DrawTriangle(cx+70,cy+50, C(0.12f,0.06f,0.06f), cx+95,cy+90, C(0.1f,0.05f,0.05f), cx+20,cy+90, C(0.12f,0.06f,0.06f),0.3f);
+        // big head
+        C2D_DrawCircleSolid(cx,cy-30,0.4f,55, C(0.15f,0.08f,0.08f));
+        // glowing eyes
+        C2D_DrawCircleSolid(cx-20,cy-40,0.5f,12, C(1,0.9f,0.2f));
+        C2D_DrawCircleSolid(cx+20,cy-40,0.5f,12, C(1,0.9f,0.2f));
+        C2D_DrawCircleSolid(cx-20,cy-40,0.6f,5, black);
+        C2D_DrawCircleSolid(cx+20,cy-40,0.6f,5, black);
+        // mouth / teeth
+        C2D_DrawRectSolid(cx-22,cy,0.6f,44,12, C(0,0,0));
+        for(int k=0;k<5;k++){
+            C2D_DrawTriangle(cx-20+k*9,cy+2, C(1,1,1), cx-16+k*9,cy+2, C(1,1,1), cx-18+k*9,cy+10, C(1,1,1),0.6f);
+        }
+        // horns
+        C2D_DrawTriangle(cx-50,cy-60, C(0.5f,0.3f,0.3f), cx-65,cy-95, C(0.4f,0.25f,0.25f), cx-30,cy-75, C(0.5f,0.3f,0.3f),0.5f);
+        C2D_DrawTriangle(cx+50,cy-60, C(0.5f,0.3f,0.3f), cx+65,cy-95, C(0.4f,0.25f,0.25f), cx+30,cy-75, C(0.5f,0.3f,0.3f),0.5f);
+        drawText(cx-80,cy+95,0.7f,"MASSIVE MONSTER",1,0.4f,0.2f);
+    } else {
+        // ----- PHASE 2: our splash (cult logo) -----
+        C2D_DrawRectSolid(0,0,0,SCR_W,SCR_H, white);
+        float cx=SCR_W/2, cy=SCR_H/2+10, R=90;
+        C2D_DrawCircleSolid(cx,cy,0.2f,R, C(0.9f,0.15f,0.15f));
+        C2D_DrawCircleSolid(cx,cy,0.21f,R-6, white);
+        for(int i=0;i<5;i++){
+            float a0=i*2.0f*3.14159f/5.0f-3.14159f/2.0f;
+            float a1=(i+2)*2.0f*3.14159f/5.0f-3.14159f/2.0f;
+            C2D_DrawLine(cx+cos(a0)*R,cy+sin(a0)*R, C(0.9f,0.15f,0.15f),
+                         cx+cos(a1)*R,cy+sin(a1)*R, C(0.9f,0.15f,0.15f),3.0f,0.5f);
+        }
+        drawLambfull(cx,cy-R-18,1.4f);
+        drawText(70,12,0.8f,"CULT OF THE LAMB",0.9f,0.1f,0.1f);
+    }
+}
+
+static void drawSplashBottom(void){
+    C2D_TargetClear(bottom, white);
+    C2D_SceneBegin(bottom);
+    C2D_DrawRectSolid(0,0,0,BOT_W,BOT_H, C(0.9f,0.9f,0.9f));
+    // ladder
+    float lx=BOT_W/2;
+    float topY=20, botY=BOT_H-20;
+    C2D_DrawRectSolid(lx-14,topY,0.2f,4,botY-topY, C(0.4f,0.3f,0.15f));
+    C2D_DrawRectSolid(lx+14,topY,0.2f,4,botY-topY, C(0.4f,0.3f,0.15f));
+    for(int i=0;i<11;i++){
+        float ry=botY-(i*(botY-topY)/10.0f);
+        C2D_DrawRectSolid(lx-14,ry,0.25f,28,3, C(0.45f,0.35f,0.18f));
+    }
+    // climbing stickman progress
+    float prog=splashTime/4.2f;
+    if(prog>=0.98f) prog=0.98f;
+    float sy=botY-prog*(botY-topY);
+    // stickman
+    C2D_DrawCircleSolid(lx,sy-12,0.4f,5, black);
+    C2D_DrawRectSolid(lx-1,sy-6,0.4f,2,7, black);
+    C2D_DrawRectSolid(lx-6,sy-3,0.45f,5,2, black);
+    C2D_DrawRectSolid(lx+3,sy-3,0.45f,5,2, black);
+    // legs alternate climbing
+    float sway=sinf(splashTime*6.0f)*4.0f;
+    C2D_DrawRectSolid(lx-3,sy+2,0.45f,3,6, black);
+    C2D_DrawRectSolid(lx-2+sway*0.3f,sy+2,0.45f,3,6, black);
+    // reached top -> MULTIGAMES
+    if(splashTime>4.2f){
+        C2D_DrawRectSolid(20,70,0.5f,280,90, C(0.9f,0.15f,0.15f));
+        drawText(40,110,1.0f,"MULTIGAMES",1,1,1);
+    }
 }
 
 static void drawLambfull(float x,float y,float sc){
@@ -608,7 +695,9 @@ static void doTalkAction(int action){
 
 static void update(float dt){
     tclock+=dt;
-    if(state==ST_PLAY){
+    if(state==ST_SPLASH){
+        updateSplash(dt);
+    } else if(state==ST_PLAY){
         u32 k=hidKeysHeld();
         float dx=0,dy=0;
         if(k&KEY_CPAD_UP) dy-=1;
@@ -731,7 +820,8 @@ int main(void){
         update(1.0f/60.0f);
         C2D_TextBufClear(tBuf);
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-        if(state==ST_PLAY){ drawGame(); drawBottomGame(); }
+        if(state==ST_SPLASH){ drawSplashTop(); drawSplashBottom(); }
+        else if(state==ST_PLAY){ drawGame(); drawBottomGame(); }
         else if(state==ST_DUNGEON){ drawDungeon(); drawBottomDungeon(); }
         else if(state==ST_TALK){ drawTalkTop(); drawBottomGame(); }
         else if(state==ST_TEMPLE){ drawTempleTop(); drawTempleBottom(); }
