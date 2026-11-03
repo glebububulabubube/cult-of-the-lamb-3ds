@@ -19,7 +19,7 @@
 #define ALTAR_R 16
 #define MAX_ENEMY 6
 #define DUNGEON_ROOMS 5
-#define SAVE_PATH "sdmc:/cultlamb/save.bin"
+#define SAVE_PATH "sdmc:/cultlamb_save.bin"
 
 static u32 C(float r,float g,float b){
     return C2D_Color32((int)(r*255),(int)(g*255),(int)(b*255),255);
@@ -110,8 +110,6 @@ static const char* bossName(void){
 }
 
 static void saveGame(void){
-    // ensure folder exists
-    mkdir("sdmc:/cultlamb");
     FILE* f=fopen(SAVE_PATH,"wb");
     if(!f) return;
     int n=followCount;
@@ -678,7 +676,8 @@ static void updateTemple(float dt){
 }
 static void drawTempleTop(void){
     tCamx=tPx-SCR_W/2; tCamy=tPy-SCR_H/2;
-    if(tCamx<0)tCamx=0; if(tCamy<0)tCamy=0;
+    if(tCamx<0)tCamx=0;
+    if(tCamy<0)tCamy=0;
     if(tCamx>TEMPLE_W-SCR_W)tCamx=TEMPLE_W-SCR_W;
     if(tCamy>TEMPLE_H-SCR_H)tCamy=TEMPLE_H-SCR_H;
     C2D_TargetClear(top, C(0.18f,0.07f,0.28f));
@@ -906,7 +905,6 @@ static void update(float dt){
 
 int main(void){
     srand((unsigned)time(NULL));
-    sdmcInit();
     gfxInitDefault();
     C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
     C2D_Init(C2D_DEFAULT_MAX_OBJECTS);
@@ -944,6 +942,5 @@ int main(void){
     C2D_Fini();
     C3D_Fini();
     gfxExit();
-    sdmcExit();
     return 0;
 }
