@@ -19,6 +19,7 @@
 #define ALTAR_R 16
 #define MAX_ENEMY 6
 #define DUNGEON_ROOMS 5
+#define SAVE_PATH "sdmc:/cultlamb/save.bin"
 
 static u32 C(float r,float g,float b){
     return C2D_Color32((int)(r*255),(int)(g*255),(int)(b*255),255);
@@ -56,6 +57,10 @@ static void drawDungeonTop(void);
 static void drawDungeonBottom(void);
 static void drawMenuTop(void);
 static void drawBottomMenu(void);
+static void saveGame(void);
+static int loadGame(void);
+static void newGame(void);
+static void demolishAt(float wx,float wy);
 
 static float px,py,php,pmaxhp=100.0f;
 static float camx,camy;
@@ -97,6 +102,86 @@ static const char* names[] = {
 static int nameCount = 18;
 static float rnd(float a,float b){ return a + (float)rand()/(float)RAND_MAX*(b-a); }
 
+static const char* bossName(void){
+    if(dTheme==0) return "LESHY";
+    if(dTheme==1) return "KALLAMAR";
+    if(dTheme==2) return "SHAMURA";
+    return "HEKAT";
+}
+
+static void saveGame(void){
+    FILE* f=fopen(SAVE_PATH,"wb");
+    if(!f) return;
+    int n=followCount;
+    fwrite(&score,sizeof(int),1,f);
+    fwrite(&hasKitchen,sizeof(int),1,f);
+    fwrite(&hasTemple,sizeof(int),1,f);
+    fwrite(&n,sizeof(int),1,f);
+    fwrite(&buildCount,sizeof(int),1,f);
+    for(int i=0;i<buildCount;i++){
+        fwrite(&bx[i],sizeof(float),1,f);
+        fwrite(&by[i],sizeof(float),1,f);
+        fwrite(&btype[i],sizeof(float),1,f);
+    }
+    for(int i=0;i<n;i++){
+        fwrite(fwName[i],24,1,f);
+        fwrite(&fwM[i],sizeof(float),1,f);
+        fwrite(&fwWork[i],sizeof(int),1,f);
+        fwrite(&fwX[i],sizeof(float),1,f);
+        fwrite(&fwY[i],sizeof(float),1,f);
+    }
+    fclose(f);
+}
+static int loadGame(void){
+    FILE* f=fopen(SAVE_PATH,"rb");
+    if(!f) return 0;
+    int n=0;
+    fread(&score,sizeof(int),1,f);
+    fread(&hasKitchen,sizeof(int),1,f);
+    fread(&hasTemple,sizeof(int),1,f);
+    fread(&n,sizeof(int),1,f);
+    fread(&buildCount,sizeof(int),1,f);
+    if(n<0||n>MAX_FOLLOW) n=0;
+    if(buildCount<0||buildCount>MAX_BUILD) buildCount=0;
+    for(int i=0;i<buildCount;i++){
+        fread(&bx[i],sizeof(float),1,f);
+        fread(&by[i],sizeof(float),1,f);
+        fread(&btype[i],sizeof(float),1,f);
+    }
+    followCount=n;
+    for(int i=0;i<n;i++){
+        fread(fwName[i],24,1,f);
+        fread(&fwM[i],sizeof(float),1,f);
+        fread(&fwWork[i],sizeof(int),1,f);
+        fread(&fwX[i],sizeof(float),1,f);
+        fread(&fwY[i],sizeof(float),1,f);
+        fwT[i]=rnd(0,6);
+    }
+    fclose(f);
+    return 1;
+}
+static void newGame(void){
+    remove(SAVE_PATH);
+    startGame();
+    state=ST_PLAY;
+}
+
+static void demolishAt(float wx,float wy){
+    int best=-1; float bestd=40*40;
+    for(int i=0;i<buildCount;i++){
+        int t=(int)btype[i];
+        if(t==2||t==4) continue;
+        float dx=bx[i]-wx, dy=by[i]-wy;
+        float d=dx*dx+dy*dy;
+        if(d<bestd){ bestd=d; best=i; }
+    }
+    if(best<0) return;
+    for(int i=best;i<buildCount-1;i++){
+        bx[i]=bx[i+1]; by[i]=by[i+1]; btype[i]=btype[i+1];
+    }
+    buildCount--;
+}
+
 static void drawText(float x,float y,float scale,const char* s,float r,float g,float b){
     C2D_Text txt;
     C2D_TextFontParse(&txt, sysFont, tBuf, s);
@@ -130,7 +215,6 @@ static void drawLambfull(float x,float y,float sc){
     C2D_DrawRectSolid(x-9*sc, y-33*sc, 0.52f, 3*sc, 5*sc, black);
     C2D_DrawRectSolid(x+6*sc, y-33*sc, 0.52f, 3*sc, 5*sc, black);
     C2D_DrawCircleSolid(x, y-26*sc, 0.6f, 2.5f*sc, C(1,0,0));
-    // sword in right hand
     C2D_DrawRectSolid(x+8*sc, y-8*sc, 0.55f, 3*sc, 12*sc, C(0.85f,0.88f,0.95f));
     C2D_DrawTriangle(x+9.5f*sc, y-22*sc, C(0.92f,0.94f,0.98f), x+7*sc,y-8*sc, C(0.92f,0.94f,0.98f), x+12*sc,y-8*sc, C(0.92f,0.94f,0.98f),0.56f);
     C2D_DrawRectSolid(x+6*sc, y-9*sc, 0.57f, 9*sc, 3*sc, C(0.65f,0.5f,0.2f));
@@ -309,20 +393,21 @@ static void drawBottomGame(void){
             C2D_DrawRectSolid(20,y-4,0.3f,280,34, col);
             drawText(40,y,0.5f,acts[i],0.9f,0.9f,0.9f);
         }
-    } else {
-        const char* types[5]={"HOUSE","TOILET","KITCHEN","DECOR","TEMPLE"};
-        const int costs[5]={3,2,6,1,8};
-        for(int i=0;i<5;i++){
-            int y=26+i*40;
-            u32 col=(i==buildSel)? C(0.55f,0.1f,0.15f): C(0.15f,0.4f,0.1f);
-            C2D_DrawRectSolid(20,y-3,0.3f,132,30, col);
-            drawText(26,y,0.42f,types[i],0.95f,0.95f,0.95f);
-            char cr[12]; snprintf(cr,12,"%d",costs[i]);
-            drawText(128,y,0.42f,cr,1,0.9f,0.2f);
+    } else{
+        const char* types[6]={"HOUSE","TOILET","KITCHEN","DECOR","TEMPLE","DESTROY"};
+        const int costs[6]={3,2,6,1,8,0};
+        for(int i=0;i<6;i++){
+            int y=16+i*34;
+            u32 col=(i==buildSel)? C(0.6f,0.15f,0.15f): C(0.15f,0.4f,0.1f);
+            if(i==5) col=(i==buildSel)? C(0.7f,0.15f,0.08f): C(0.35f,0.18f,0.06f);
+            C2D_DrawRectSolid(20,y,0.3f,120,28, col);
+            drawText(26,y+2,0.4f,types[i],0.95f,0.95f,0.95f);
+            if(i<5){ char cr[12]; snprintf(cr,12,"%d",costs[i]); drawText(116,y+2,0.4f,cr,1,0.9f,0.2f); }
         }
-        C2D_DrawRectSolid(180,80,0.3f,125,90, C(0.1f,0.3f,0.08f));
-        drawText(186,120,0.5f,"TAP = build",1,0.9f,0.4f);
-        if(buildFailMsg>0) drawText(186,96,0.5f,"NO FOOD!",1,0.4f,0.2f);
+        C2D_DrawRectSolid(165,60,0.3f,140,120, C(0.1f,0.3f,0.08f));
+        drawText(172,110,0.5f,"TAP = build",1,0.9f,0.4f);
+        if(buildSel==5) drawText(172,170,0.45f,"TAP bldg = delete",1,0.5f,0.3f);
+        if(buildFailMsg>0) drawText(172,190,0.5f,"NO FOOD!",1,0.4f,0.2f);
     }
 }
 
@@ -338,7 +423,6 @@ static void drawTalkTop(void){
     drawText(40,30,0.6f,t,1,0.9f,0.4f);
 }
 
-// ==== DUNGEON HUB (4 themed doors) ====
 static void enterHub(void){
     hx=200; hy=200; php=pmaxhp;
 }
@@ -372,7 +456,7 @@ static void drawHubTop(void){
         float fx=(i*61)% SCR_W, fy=(i*83)% SCR_H;
         C2D_DrawRectSolid(fx,fy,0.1f,2,2, C(0.22f,0.18f,0.28f));
     }
-    struct { float x,y; const char* t; u32 col; } dr[4] = {
+    struct { float x,y; const char* t; u32 col;} dr[4] = {
         {110,70,"FOREST", C(0.2f,0.5f,0.2f)},
         {290,70,"WATER",  C(0.2f,0.4f,0.75f)},
         {110,190,"SPIDERS",C(0.35f,0.15f,0.35f)},
@@ -398,7 +482,6 @@ static void drawHubBottom(void){
     drawText(30,110,0.6f,"B: back to cult",1,0.9f,0.4f);
 }
 
-// ==== DUNGEON ROOMS ====
 static void loadRoom(void){
     for(int i=0;i<MAX_ENEMY;i++){ exd[i]=eyd[i]=ehpz[i]=0; }
     dEnemyCount=0; dEnemies=0;
@@ -499,7 +582,7 @@ static void drawBishop(float x,float y){
     C2D_DrawCircleSolid(x+3,y-3,0.5f,2, white);
     C2D_DrawRectSolid(x+20,y-18,0.4f,2,34, C(0.4f,0.3f,0.2f));
     C2D_DrawCircleSolid(x+21,y-20,0.4f,4, C(0.9f,0.8f,0.2f));
-    drawText(x-24,y+22,0.5f,"BISHOP",1,0.85f,0.3f);
+    drawText(x-30,y+22,0.5f,bossName(),1,0.85f,0.3f);
 }
 static void drawDungeonTop(void){
     u32 rb;
@@ -540,7 +623,10 @@ static void drawDungeonTop(void){
         float frac=ehpz[0]/220.0f; if(frac<0)frac=0;
         C2D_DrawRectSolid(mx+1,my+1,0.51f,158*frac,8, C(0.9f,0.2f,0.15f));
     }
-    if(dEnemies<=0 && bossRoom) drawText(SCR_W/2-90,SCR_H/2+40,0.6f,"BISHOP DEFEATED!",1,0.9f,0.3f);
+    if(dEnemies<=0 && bossRoom){
+        char txt[48]; snprintf(txt,48,"%s DEFEATED!",bossName());
+        drawText(SCR_W/2-90,SCR_H/2+40,0.6f,txt,1,0.9f,0.3f);
+    }
 }
 static void drawDungeonBottom(void){
     C2D_TargetClear(bottom, C(0.08f,0.04f,0.04f));
@@ -552,7 +638,6 @@ static void drawDungeonBottom(void){
     drawText(30,100,0.6f,h,1,0.8f,0.4f);
 }
 
-// ==== TEMPLE ====
 static void enterTemple(void){
     tPx=TEMPLE_W/2; tPy=TEMPLE_H-80;
     tAltarX=TEMPLE_W/2; tAltarY=TEMPLE_H/2;
@@ -690,12 +775,12 @@ static void drawBottomMenu(void){
     C2D_TargetClear(bottom, black);
     C2D_SceneBegin(bottom);
     C2D_DrawRectSolid(0,0,0,BOT_W,BOT_H, black);
-    drawText(60,6,0.55f,"CULT OF THE LAMB",1,0.2f,0.2f);
-    const char* items[4]={"PLAY","SETTINGS","CREDITS","EXIT"};
+    drawText(40,6,0.5f,"CULT OF THE LAMB",1,0.2f,0.2f);
+    const char* items[4]={"PLAY","NEW GAME","SETTINGS","EXIT"};
     for(int i=0;i<4;i++){
-        int y=45+i*50;
+        int y=45+i*48;
         u32 col=(i==menuSel)? C(0.55f,0.1f,0.15f): C(0.18f,0.12f,0.1f);
-        C2D_DrawRectSolid(30,y-4,0.3f,260,30, col);
+        C2D_DrawRectSolid(40,y-4,0.3f,240,30, col);
         drawText(60,y-2,0.6f,items[i],0.9f,0.9f,0.9f);
     }
 }
@@ -743,12 +828,13 @@ static void update(float dt){
         if((tp.px!=0||tp.py!=0)&&touchCd<=0){
             float tpx=tp.px, tpy=tp.py;
             if(tpx<160){
-                int selt=(int)(tpy/40);
-                if(selt>=0&&selt<5) buildSel=selt;
+                int selt=(int)(tpy/34);
+                if(selt>=0&&selt<6) buildSel=selt;
             } else {
-                float wx=camx+((tpx-170)/((float)BOT_W-170))*SCR_W + (tpx-170);
+                float wx=camx+((tpx-170)/((float)BOT_W-165))*SCR_W;
                 float wy=camy+(tpy/(float)BOT_H)*SCR_H;
-                tryBuild(buildSel,wx,wy);
+                if(buildSel==5) demolishAt(wx,wy);
+                else tryBuild(buildSel,wx,wy);
             }
             touchCd=0.3f;
         }
@@ -803,9 +889,13 @@ static void update(float dt){
         static float mCd=0;
         if(mCd>0)mCd-=dt;
         if((tp.px!=0||tp.py!=0)&&mCd<=0){
-            int row=(tp.py-20)/50;
+            int row=(tp.py-45)/48;
             if(row>=0&&row<4) menuSel=row;
-            if(row==0){ state=ST_PLAY; startGame(); }
+            if(row==0){
+                startGame();
+                if(loadGame()){ state=ST_PLAY; }
+            }
+            else if(row==1){ newGame(); }
             else if(row==3) wantExit=true;
             mCd=0.3f;
         }
@@ -833,8 +923,8 @@ int main(void){
     while(aptMainLoop()){
         hidScanInput();
         u32 down=hidKeysDown();
-        if(down&KEY_START) break;
-        if(wantExit) break;
+        if(down&KEY_START){ saveGame(); break; }
+        if(wantExit){ saveGame(); break; }
         update(1.0f/60.0f);
         C2D_TextBufClear(tBuf);
         C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
