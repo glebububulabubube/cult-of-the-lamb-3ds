@@ -31,7 +31,7 @@ static void addFollower(float x,float y,const char* nm);
 static void addRandomFollower(float x,float y);
 static void updateDungeon(float dt);
 static void drawText(float x,float y,float scale,const char* s,float r,float g,float b);
-static void drawLambfull(float x,float y,float sc);
+static void drawLambfull(float x,float y,float sc,int sword);
 static void drawFollowerWander(float ox,float oy);
 static void drawBottomGrass(void);
 static void drawBuilding(float wx,float wy,int type);
@@ -52,7 +52,7 @@ static void drawHubBottom(void);
 static void loadRoom(void);
 static void enterDungeon(int theme);
 static void drawEnemy(float x,float y);
-static void drawBishop(float x,float y);
+static void drawBoss(float x,float y);
 static void drawDungeonTop(void);
 static void drawDungeonBottom(void);
 static void drawMenuTop(void);
@@ -167,7 +167,7 @@ static void newGame(void){
 }
 
 static void demolishAt(float wx,float wy){
-    int best=-1; float bestd=40*40;
+    int best=-1; float bestd=46*46;
     for(int i=0;i<buildCount;i++){
         int t=(int)btype[i];
         if(t==2||t==4) continue;
@@ -189,15 +189,18 @@ static void drawText(float x,float y,float scale,const char* s,float r,float g,f
     C2D_DrawText(&txt, C2D_AlignLeft, x, y, 0.3f, scale, scale, C(r,g,b));
 }
 
-static void drawLambfull(float x,float y,float sc){
+static void drawLambfull(float x,float y,float sc,int sword){
     C2D_DrawCircleSolid(x, y+22*sc, 0.6f, 9*sc, C2D_Color32(0,0,0,90));
     C2D_DrawRectSolid(x-8*sc, y+12*sc, 0.3f, 4*sc, 9*sc, grey);
     C2D_DrawRectSolid(x+4*sc, y+12*sc, 0.3f, 4*sc, 9*sc, grey);
     C2D_DrawRectSolid(x-13*sc, y-6*sc, 0.4f, 26*sc, 20*sc, red);
-    for(int i=0;i<5;i++){
-        float zx=x-12*sc+i*6*sc;
-        C2D_DrawRectSolid(zx, y+13*sc, 0.41f, 5*sc, 3*sc, (i%2)? white : C(0.9f,0.9f,0.9f));
-    }
+    C2D_DrawCircleSolid(x, y-12*sc, 0.35f, 11*sc, white);
+    C2D_DrawCircleSolid(x, y-12*sc, 0.36f, 9*sc, white);
+    C2D_DrawTriangle(x-8*sc, y-22*sc, C(0.8f,0.1f,0.1f), x-12*sc,y-28*sc, C(0.7f,0.08f,0.08f), x-4*sc,y-24*sc, C(0.8f,0.1f,0.1f),0.4f);
+    C2D_DrawTriangle(x+8*sc, y-22*sc, C(0.8f,0.1f,0.1f), x+12*sc,y-28*sc, C(0.7f,0.08f,0.08f), x+4*sc,y-24*sc, C(0.8f,0.1f,0.1f),0.4f);
+    C2D_DrawCircleSolid(x, y+14*sc, 0.5f, 3*sc, yellow);
+    C2D_DrawCircleSolid(x, y+14*sc, 0.51f, 3*sc, yellow);
+    C2D_DrawRectSolid(x-2*sc, y+14*sc, 0.52f, 4*sc, 4*sc, C(0.0f,0.0f,0.0f));
     C2D_DrawRectSolid(x-16*sc, y-2*sc, 0.5f, 5*sc, 8*sc, grey);
     C2D_DrawRectSolid(x+11*sc, y-2*sc, 0.5f, 5*sc, 8*sc, grey);
     C2D_DrawCircleSolid(x, y+3*sc, 0.51f, 4*sc, yellow);
@@ -215,9 +218,11 @@ static void drawLambfull(float x,float y,float sc){
     C2D_DrawRectSolid(x-9*sc, y-33*sc, 0.52f, 3*sc, 5*sc, black);
     C2D_DrawRectSolid(x+6*sc, y-33*sc, 0.52f, 3*sc, 5*sc, black);
     C2D_DrawCircleSolid(x, y-26*sc, 0.6f, 2.5f*sc, C(1,0,0));
-    C2D_DrawRectSolid(x+8*sc, y-8*sc, 0.55f, 3*sc, 12*sc, C(0.85f,0.88f,0.95f));
-    C2D_DrawTriangle(x+9.5f*sc, y-22*sc, C(0.92f,0.94f,0.98f), x+7*sc,y-8*sc, C(0.92f,0.94f,0.98f), x+12*sc,y-8*sc, C(0.92f,0.94f,0.98f),0.56f);
-    C2D_DrawRectSolid(x+6*sc, y-9*sc, 0.57f, 9*sc, 3*sc, C(0.65f,0.5f,0.2f));
+    if(sword){
+        C2D_DrawRectSolid(x+8*sc, y-8*sc, 0.55f, 3*sc, 12*sc, C(0.85f,0.88f,0.95f));
+        C2D_DrawTriangle(x+9.5f*sc, y-22*sc, C(0.92f,0.94f,0.98f), x+7*sc,y-8*sc, C(0.92f,0.94f,0.98f), x+12*sc,y-8*sc, C(0.92f,0.94f,0.98f),0.56f);
+        C2D_DrawRectSolid(x+6*sc, y-9*sc, 0.57f, 9*sc, 3*sc, C(0.65f,0.5f,0.2f));
+    }
 }
 
 static void addFollower(float x,float y,const char* nm){
@@ -364,7 +369,7 @@ static void drawGame(void){
     drawTopGate(ox,oy);
     drawHouses(ox,oy);
     drawFollowerWander(ox,oy);
-    drawLambfull(px-ox,py-oy,1.0f);
+    drawLambfull(px-ox,py-oy,1.0f,0);
     if(dmgFlash>0) C2D_DrawRectSolid(0,0,0.9f,SCR_W,SCR_H, C2D_Color32(255,0,0,50));
     char h[32]; snprintf(h,32,"Food:%d Cult:%d",score,followCount);
     drawText(8,30,0.5f,h,1,0.85f,0.3f);
@@ -470,7 +475,7 @@ static void drawHubTop(void){
     }
     C2D_DrawRectSolid(176,218,0.2f,48,20, C(0.35f,0.25f,0.2f));
     drawText(185,226,0.4f,"BACK",1,0.85f,0.7f);
-    drawLambfull(hx,hy,1.0f);
+    drawLambfull(hx,hy,1.0f,1);
     drawText(50,6,0.5f,"DUNGEON HALL",1,0.9f,0.4f);
 }
 static void drawHubBottom(void){
@@ -556,34 +561,62 @@ static void updateDungeon(float dt){
         }
     }
 }
+
 static void drawEnemy(float x,float y){
-    u32 zc;
-    if(dTheme==0) zc=C(0.2f,0.55f,0.2f);
-    else if(dTheme==1) zc=C(0.2f,0.4f,0.8f);
-    else if(dTheme==2) zc=C(0.35f,0.18f,0.4f);
-    else zc=C(0.3f,0.55f,0.32f);
-    C2D_DrawRectSolid(x-7,y+2,0.3f,14,15, zc);
-    C2D_DrawCircleSolid(x,y,0.3f,8, zc);
-    C2D_DrawCircleSolid(x-3,y-2,0.5f,2, red);
-    C2D_DrawCircleSolid(x+3,y-2,0.5f,2, red);
-    if(dTheme==2){
-        for(int i=0;i<4;i++) C2D_DrawRectSolid(x-9+i*3,y+7,0.4f,2,6, C(0.2f,0.1f,0.22f));
-    } else if(dTheme==3){
-        C2D_DrawCircleSolid(x-2,y+4,0.5f,2, C(0.65f,0.8f,0.65f));
-        C2D_DrawCircleSolid(x+3,y+2,0.5f,1.5f, C(0.65f,0.8f,0.65f));
-    }
+    C2D_DrawRectSolid(x-9,y-2,0.3f,18,20, C(0.14f,0.14f,0.15f));
+    C2D_DrawTriangle(x-8,y+16, C(0.1f,0.1f,0.11f), x-13,y+22, C(0.08f,0.08f,0.09f), x-3,y+21, C(0.1f,0.1f,0.11f),0.35f);
+    C2D_DrawTriangle(x+8,y+16, C(0.1f,0.1f,0.11f), x+13,y+22, C(0.08f,0.08f,0.09f), x+3,y+21, C(0.1f,0.1f,0.11f),0.35f);
+    C2D_DrawCircleSolid(x,y-5,0.31f,9, C(0.1f,0.1f,0.12f));
+    C2D_DrawRectSolid(x-2,y-9,0.5f,4,11, C(0.9f,0.1f,0.1f));
+    C2D_DrawRectSolid(x-1,y-5,0.51f,2,6, C(0.9f,0.1f,0.1f));
+    C2D_DrawRectSolid(x+6,y-5,0.5f,2,8, C(0.75f,0.78f,0.85f));
+    C2D_DrawTriangle(x+6,y+6, C(0.75f,0.78f,0.85f), x+3,y+1, C(0.75f,0.78f,0.85f), x+8,y+1, C(0.75f,0.78f,0.85f),0.5f);
 }
-static void drawBishop(float x,float y){
+
+static void drawBoss(float x,float y){
     float s=1.5f;
-    C2D_DrawRectSolid(x-16,y-4,0.3f,32,34, C(0.35f,0.1f,0.42f));
-    C2D_DrawCircleSolid(x,y,0.3f,10*s, C(0.55f,0.28f,0.6f));
-    C2D_DrawTriangle(x-7,y-12, C(0.9f,0.8f,0.3f), x+7,y-12, C(0.9f,0.8f,0.3f), x,y-26, C(0.9f,0.8f,0.3f),0.4f);
-    C2D_DrawCircleSolid(x-3,y-3,0.5f,2, white);
-    C2D_DrawCircleSolid(x+3,y-3,0.5f,2, white);
-    C2D_DrawRectSolid(x+20,y-18,0.4f,2,34, C(0.4f,0.3f,0.2f));
-    C2D_DrawCircleSolid(x+21,y-20,0.4f,4, C(0.9f,0.8f,0.2f));
-    drawText(x-30,y+22,0.5f,bossName(),1,0.85f,0.3f);
+    if(dTheme==0){
+        C2D_DrawRectSolid(x-20,y,0.3f,40,30, C(0.32f,0.22f,0.1f));
+        C2D_DrawRectSolid(x-22,y+8,0.31f,44,8, C(0.28f,0.18f,0.08f));
+        C2D_DrawRectSolid(x-18,y+26,0.32f,36,10, C(0.25f,0.16f,0.07f));
+        C2D_DrawCircleSolid(x,y+6,0.4f,16, C(0.1f,0.05f,0.03f));
+        C2D_DrawCircleSolid(x,y+6,0.41f,17, C(0.4f,0.28f,0.18f));
+        C2D_DrawCircleSolid(x,y+6,0.42f,15, C(0.05f,0.02f,0.02f));
+        for(int i=0;i<5;i++){
+            C2D_DrawTriangle(x-12+i*6,y+4, C(1,1,1), x-8+i*6,y+4, C(1,1,1), x-10+i*6,y+12, C(1,1,1),0.45f);
+        }
+        C2D_DrawCircleSolid(x-6,y-6,0.34f,4, red);
+        C2D_DrawCircleSolid(x+6,y-6,0.34f,4, red);
+        C2D_DrawCircleSolid(x-6,y-6,0.35f,2, black);
+        C2D_DrawCircleSolid(x+6,y-6,0.35f,2, black);
+        C2D_DrawTriangle(x-14,y-6, C(0.2f,0.5f,0.2f), x-20,y-16, C(0.15f,0.45f,0.15f), x-6,y-10, C(0.2f,0.5f,0.2f),0.4f);
+        C2D_DrawTriangle(x+14,y-6, C(0.2f,0.5f,0.2f), x+20,y-16, C(0.15f,0.45f,0.15f), x+6,y-10, C(0.2f,0.5f,0.2f),0.4f);
+        C2D_DrawCircleSolid(x,y+28,0.4f,2, red);
+    } else if(dTheme==1){
+        C2D_DrawCircleSolid(x,y,0.3f,14, C(0.2f,0.4f,0.8f));
+        C2D_DrawCircleSolid(x,y,0.31f,10, C(0.35f,0.6f,0.9f));
+        C2D_DrawCircleSolid(x,y-6,0.34f,3, white);
+        C2D_DrawRectSolid(x-3,y,0.4f,6,16, C(0.15f,0.35f,0.75f));
+    } else if(dTheme==2){
+        C2D_DrawCircleSolid(x,y,0.3f,14, C(0.35f,0.18f,0.4f));
+        C2D_DrawCircleSolid(x,y,0.31f,9, C(0.45f,0.25f,0.5f));
+        C2D_DrawCircleSolid(x-3,y-4,0.34f,2, red);
+        C2D_DrawCircleSolid(x+3,y-4,0.34f,2, red);
+        for(int i=0;i<4;i++){
+            float a=i*1.2f-2.4f;
+            C2D_DrawRectSolid(x-16*cosf(a), y+(i%2?4:-4), 0.4f, 14*cosf(a), 3, C(0.2f,0.1f,0.25f));
+        }
+    } else {
+        C2D_DrawCircleSolid(x,y+4,0.3f,16, C(0.3f,0.55f,0.32f));
+        C2D_DrawCircleSolid(x,y-4,0.31f,12, C(0.4f,0.65f,0.4f));
+        C2D_DrawCircleSolid(x-6,y-6,0.34f,3, C(0.2f,0.45f,0.2f));
+        C2D_DrawCircleSolid(x+6,y-6,0.34f,3, C(0.2f,0.45f,0.2f));
+        C2D_DrawRectSolid(x-8,y+8,0.35f,16,5, black);
+    }
+    drawText(x-30,y+26,0.5f,bossName(),1,0.85f,0.3f);
+    (void)s;
 }
+
 static void drawDungeonTop(void){
     u32 rb;
     if(dTheme==0) rb=C(0.1f,0.2f,0.08f);
@@ -612,10 +645,10 @@ static void drawDungeonTop(void){
     bool bossRoom=(dRoom==DUNGEON_ROOMS-1);
     for(int i=0;i<dEnemyCount;i++){
         if(ehpz[i]<=0) continue;
-        if(bossRoom) drawBishop(exd[i],eyd[i]);
+        if(bossRoom) drawBoss(exd[i],eyd[i]);
         else drawEnemy(exd[i],eyd[i]);
     }
-    drawLambfull(dpx,dpy,0.8f);
+    drawLambfull(dpx,dpy,0.8f,1);
     if(dRed>0) C2D_DrawRectSolid(0,0,0.9f,SCR_W,SCR_H, C2D_Color32(255,0,0,60));
     if(bossRoom && dEnemies>0){
         float mx=SCR_W/2-80, my=22;
@@ -715,7 +748,7 @@ static void drawTempleTop(void){
     C2D_DrawCircleSolid(ax,ay,0.3f,8, C(1.0f,0.8f,0.2f));
     drawText(ax-40,ay+44,0.5f,"THE ALTAR",1,0.8f,0.4f);
     if(templeUiDisp) drawText(ax-20,ay-60,0.5f,"A to act",1,0.9f,0.4f);
-    drawLambfull(tPx-tCamx,tPy-tCamy,1.0f);
+    drawLambfull(tPx-tCamx,tPy-tCamy,1.0f,0);
     drawText(SCR_W/2-60,SCR_H-20,0.5f,"B=leave",0.9f,0.8f,0.6f);
 }
 static void drawTempleBottom(void){
@@ -769,7 +802,7 @@ static void drawMenuTop(void){
         C2D_DrawLine(cx+cos(a0)*R,cy+sin(a0)*R, C(0.9f,0.15f,0.15f),
                      cx+cos(a1)*R,cy+sin(a1)*R, C(0.9f,0.15f,0.15f),3.0f,0.5f);
     }
-    drawLambfull(cx,cy-R-18,1.4f);
+    drawLambfull(cx,cy-R-18,1.4f,0);
     drawText(40,12,0.8f,"CULT OF THE LAMB",0.9f,0.1f,0.1f);
 }
 static void drawBottomMenu(void){
