@@ -10,11 +10,19 @@ TOPDIR ?= $(CURDIR)
 include $(DEVKITARM)/3ds_rules
 
 #---------------------------------------------------------------------------------
+# TARGET is the name of the output
+# BUILD is the directory where object files & intermediate files will be placed
+# SOURCES is a list of directories containing source code
+# INCLUDES is a list of directories containing extra header files
+#---------------------------------------------------------------------------------
 TARGET		:=	cotl-3ds
 BUILD		:=	build
 SOURCES		:=	source
 INCLUDES	:=	include
 
+#---------------------------------------------------------------------------------
+# options for code generation
+#---------------------------------------------------------------------------------
 ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 
 CFLAGS	:=	-g -Wall -O2 -mword-relocations \
@@ -30,8 +38,13 @@ LDFLAGS	=	-specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
 LIBS	:= -lcitro2d -lcitro3d -lctru -lm
 
+#---------------------------------------------------------------------------------
+# list of directories containing libraries, this must be the top level containing
+# include and lib
+#---------------------------------------------------------------------------------
 LIBDIRS	:= $(CTRULIB)
 
+#---------------------------------------------------------------------------------
 ifeq ($(strip $(ICON)),)
 	icons := $(wildcard *.png)
 	ifneq (,$(findstring $(TARGET).png,$(icons)))
@@ -46,10 +59,16 @@ else
 endif
 
 APP_TITLE		:=	Cult of the Lamb 3DS
-APP_DESCRIPTION	:=	CultLamb - worship the lamb
+APP_DESCRIPTION	:=	CultLamb - worship and build
 APP_AUTHOR		:=	Gleb
+export APP_ICON	:=	$(TOPDIR)/icon.png
 
+#---------------------------------------------------------------------------------
+# no real need to edit anything past this point unless you need to add additional
+# rules for different file extensions
+#---------------------------------------------------------------------------------
 ifneq ($(BUILD),$(notdir $(CURDIR)))
+#---------------------------------------------------------------------------------
 
 export OUTPUT	:=	$(CURDIR)/$(TARGET)
 export TOPDIR	:=	$(CURDIR)
@@ -66,10 +85,15 @@ SFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
 BINFILES	:=	$(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))
 
 ifeq ($(strip $(CPPFILES)),)
+#---------------------------------------------------------------------------------
 	export LD	:=	$(CC)
+#---------------------------------------------------------------------------------
 else
+#---------------------------------------------------------------------------------
 	export LD	:=	$(CXX)
+#---------------------------------------------------------------------------------
 endif
+#---------------------------------------------------------------------------------
 
 export OFILES_SOURCES 	:=	$(CPPFILES:.cpp=.o) $(CFILES:.c=.o) $(SFILES:.s=.o)
 export OFILES_BIN	:=	$(addsuffix .o,$(BINFILES))
@@ -88,6 +112,7 @@ export _3DSXFLAGS	:=	$(if $(NO_SMDH),,--smdh=$(CURDIR)/$(TARGET).smdh)
 
 .PHONY: all clean
 
+#---------------------------------------------------------------------------------
 all: $(BUILD) $(DEPSDIR)
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
@@ -103,16 +128,21 @@ clean:
 	@echo clean ...
 	@rm -fr $(BUILD) $(TARGET).3dsx $(TARGET).elf $(TARGET).smdh $(TARGET).cia
 
+#---------------------------------------------------------------------------------
 else
 
 ifeq ($(DESTDIR),)
 DESTDIR := $(TOPDIR)
 endif
 
+#---------------------------------------------------------------------------------
+# main targets
+#---------------------------------------------------------------------------------
 .PHONY: all
 
 all	:	$(DESTDIR)/$(TARGET).cia
 
+#---------------------------------------------------------------------------------
 $(DESTDIR)/$(TARGET).elf	:	$(OFILES)
 	@echo linking $(notdir $@)
 	@$(LD) $(LDFLAGS) $(OFILES) $(LIBPATHS) $(LIBS) -o $@
