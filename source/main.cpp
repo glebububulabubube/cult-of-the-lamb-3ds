@@ -5,8 +5,6 @@
 #include <math.h>
 #include <string.h>
 #include <time.h>
-#include <tex3ds.h>
-#include "lamb_tex.h"
 #define SCR_W 400
 #define SCR_H 240
 #define BOT_W 320
@@ -53,34 +51,6 @@ static float hx,hy;
 // resources: type 0=tree(sapling->grows),1=rock ; x,y world ; growth 0..1
 static float rx[MAX_RES],ry[MAX_RES],rg[MAX_RES];static int rt[MAX_RES],rCnt=0;
 static int rWood=0,rStone=0;
-static C2D_Image g_lamb;
-static bool g_lambReady=false;
-static void loadLambTex(void){
-    // allocate GPU tex (128x128 RGBA8 = 64KB)
-    if(!C3D_TexInit(&g_lamb.tex,128,128,GPU_RGBA8))return;
-    C3D_TexSetFilter(&g_lamb.tex,GPU_LINEAR,GPU_LINEAR);
-    C3D_TexSetWrap(&g_lamb.tex,GPU_CLAMP_TO_EDGE,GPU_CLAMP_TO_EDGE);
-    u8* dst=(u8*)g_lamb.tex.data;
-    const u32 W=128,H=128, TILE=8, TW=W/TILE;
-    for(u32 y=0;y<H;y++){
-        for(u32 x=0;x<W;x++){
-            u32 tx=x/TILE, ty=y/TILE;
-            u32 ox=x%TILE, oy=y%TILE;
-            // morton (z-order) index within 8x8 tile
-            u32 m=0;
-            for(int b=0;b<3;b++){ m|=((ox>>b)&1)<<(2*b); m|=((oy>>b)&1)<<(2*b+1); }
-            u32 dstIdx=(ty*TW+tx)*(TILE*TILE)+m;
-            u32 px=lamb_tex[y*W+x];
-            dst[dstIdx*4+0]=(px>>24)&0xFF; // R
-            dst[dstIdx*4+1]=(px>>16)&0xFF; // G
-            dst[dstIdx*4+2]=(px>>8)&0xFF;  // B
-            dst[dstIdx*4+3]=(px)&0xFF;     // A
-        }
-    }
-    C3D_TexFlush(&g_lamb.tex);
-    g_lamb.subtex=C2D_CreateSubtexture(&g_lamb.tex,0,0,128,128);
-    g_lambReady=true;
-}
 static const char* nmAll[]={"ZEB","MORK","LUG","ROK","SYN","BAR","NAT","VEX","KRO","MAL","ZOR","GNA","THU","FEN","ORY","SAL","VUL","IX"};
 static int nmC=18;
 static float rnd(float a,float b){ return a+(float)rand()/(float)RAND_MAX*(b-a); }
@@ -91,24 +61,6 @@ static void text(float x,float y,float s,const char* t,float r,float g,float b){
     C2D_DrawText(&t1,C2D_AlignLeft,x,y,0.3f,s,s,C(r,g,b));
 }
 static void lamb(float x,float y,float sc,int sword){
-    if(g_lambReady && g_lamb.subtex){
-        // draw real texture centered on (x,y), 128x128 at scale sc
-        C2D_ImageTint tint;
-        C2D_PlainImageTint(&tint,0xFFFFFFFF,0.0f);
-        C2D_Tint* tc=tint.corners;
-        // use alpha from texture; white tint blend=0 keeps texture color
-        C2D_DrawImageAt(g_lamb,x-64*sc,y-64*sc,0.5f,&tint,sc,sc);
-        (void)tc;
-        // shadow + sword as before
-        C2D_DrawCircleSolid(x,y+24*sc,0.3f,10*sc,C2D_Color32(0,0,0,80));
-        if(sword){
-            C2D_DrawRectSolid(x+18*sc,y-8*sc,0.55f,3*sc,13*sc,C(0.85f,0.88f,0.95f));
-            C2D_DrawTriangle(x+19.5f*sc,y-22*sc,C(0.92f,0.94f,0.98f),x+17*sc,y-8*sc,C(0.92f,0.94f,0.98f),x+22*sc,y-8*sc,C(0.92f,0.94f,0.98f),0.56f);
-            C2D_DrawRectSolid(x+16*sc,y-9*sc,0.57f,9*sc,3*sc,C(0.65f,0.5f,0.2f));
-        }
-        return;
-    }
-    // fallback: procedural lamb (used only before texture loads or if it fails)
     C2D_DrawCircleSolid(x,y+22*sc,0.6f,9*sc,C2D_Color32(0,0,0,90));
     C2D_DrawRectSolid(x-8*sc,y+12*sc,0.3f,4*sc,9*sc,grey);
     C2D_DrawRectSolid(x+4*sc,y+12*sc,0.3f,4*sc,9*sc,grey);
@@ -471,7 +423,6 @@ int main(void){
     top=C2D_CreateScreenTarget(GFX_TOP,GFX_LEFT);bottom=C2D_CreateScreenTarget(GFX_BOTTOM,GFX_LEFT);
     fnt=C2D_FontLoadSystem(CFG_REGION_USA);tbuf=C2D_TextBufNew(4096);
     bg=C(0.2f,0.5f,0.15f);red=C(0.85f,0.05f,0.1f);cream=C(0.95f,0.9f,0.8f);black=C(0.05f,0.05f,0.05f);white=C(1,1,1);grey=C(0.45f,0.42f,0.42f);yellow=C(1,0.85f,0.2f);
-    loadLambTex();
     while(aptMainLoop()){
         hidScanInput();u32 down=hidKeysDown();if(down&KEY_START){save();break;}if(wantExit){save();break;}
         update(1.0f/60.0f);C2D_TextBufClear(tbuf);C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
