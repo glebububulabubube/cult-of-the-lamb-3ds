@@ -34,6 +34,7 @@ static float p2x,p2y; static bool p2Active=false;
 static int coopOn=0;
 static int n3dsOn=0;
 static int optSel=0;
+static u32 lastKeys=0;
 static float bx[MAX_BUILD],by[MAX_BUILD],btype[MAX_BUILD];
 static int buildCount,hasKitchen,hasTemple;
 static float fwX[MAX_FOLLOW],fwY[MAX_FOLLOW],fwT[MAX_FOLLOW],fwM[MAX_FOLLOW];
@@ -521,6 +522,9 @@ static int load(void){
 static void newGame(void){remove(SV);startGame();state=ST_PLAY;}
 static void update(float dt){
     tclock+=dt;
+    u32 all=hidKeysDown();
+    u32 fresh=all & ~lastKeys;   // only newly-pressed
+    lastKeys=all;
     if(state==ST_PLAY){
         u32 k=hidKeysHeld();float dx=0,dy=0;if(k&KEY_CPAD_UP)dy-=1;if(k&KEY_CPAD_DOWN)dy+=1;if(k&KEY_CPAD_LEFT)dx-=1;if(k&KEY_CPAD_RIGHT)dx+=1;
         float l=sqrtf(dx*dx+dy*dy);if(l>0){dx/=l;dy/=l;}px+=dx*2.6f*60.f*dt;py+=dy*2.6f*60.f*dt;
@@ -560,17 +564,16 @@ static void update(float dt){
     else if(state==ST_TALK){touchPosition tp;hidTouchRead(&tp);u32 down=hidKeysDown();if(down&KEY_B){talkOpen=0;state=ST_PLAY;}if(down&(KEY_DUP|KEY_CPAD_UP))talkSel=(talkSel+3)%4;if(down&(KEY_DDOWN|KEY_CPAD_DOWN))talkSel=(talkSel+1)%4;static float tc=0;if(tc>0)tc-=dt;if((tp.px!=0||tp.py!=0)&&tc<=0){int row=(tp.py-20)/50;if(row>=0&&row<4){talkSel=row;doTalk(row);}tc=0.3f;}if(down&KEY_A)doTalk(talkSel);}
     else if(state==ST_TMP){tmpUp(dt);}
     else if(state==ST_OPT){
-        u32 down=hidKeysDown();
-        if(down&(KEY_DUP|KEY_CPAD_UP))optSel=(optSel+1)%2;
-        if(down&(KEY_DDOWN|KEY_CPAD_DOWN))optSel=(optSel+1)%2;
-        if(down&KEY_A){
+        if(fresh&(KEY_DUP|KEY_CPAD_UP))optSel=(optSel+1)%2;
+        if(fresh&(KEY_DDOWN|KEY_CPAD_DOWN))optSel=(optSel+1)%2;
+        if(fresh&KEY_A){
             if(optSel==0)coopOn=(coopOn?0:1);
             else n3dsOn=(n3dsOn?0:1);
         }
-        if(down&KEY_B)state=ST_MENU;
+        if(fresh&KEY_B)state=ST_MENU;
     }
-    else if(state==ST_MENU){touchPosition tp;hidTouchRead(&tp);static float mc=0;if(mc>0)mc-=dt;u32 down=hidKeysDown();if(down&(KEY_DUP|KEY_CPAD_UP))menuSel=(menuSel+3)%4;if(down&(KEY_DDOWN|KEY_CPAD_DOWN))menuSel=(menuSel+1)%4;if((tp.px!=0||tp.py!=0)&&mc<=0){int row=(tp.py-45)/48;if(row>=0&&row<4)menuSel=row;if(row==0){startGame();if(load())state=ST_PLAY;}else if(row==1)newGame();else if(row==2)state=ST_OPT;else if(row==3)wantExit=true;mc=0.3f;}if(down&KEY_A){if(menuSel==0){startGame();if(load())state=ST_PLAY;}else if(menuSel==1)newGame();else if(menuSel==2)state=ST_OPT;else if(menuSel==3)wantExit=true;}}
-}
+else if(state==ST_MENU){touchPosition tp;hidTouchRead(&tp);static float mc=0;if(mc>0)mc-=dt;if(fresh&(KEY_DUP|KEY_CPAD_UP))menuSel=(menuSel+3)%4;if(fresh&(KEY_DDOWN|KEY_CPAD_DOWN))menuSel=(menuSel+1)%4;if((tp.px!=0||tp.py!=0)&&mc<=0){int row=(tp.py-45)/48;if(row>=0&&row<4)menuSel=row;if(row==0){startGame();if(load())state=ST_PLAY;}else if(row==1)newGame();else if(row==2)state=ST_OPT;else if(row==3)wantExit=true;mc=0.3f;}if(fresh&KEY_A){if(menuSel==0){startGame();if(load())state=ST_PLAY;}else if(menuSel==1)newGame();else if(menuSel==2)state=ST_OPT;else if(menuSel==3)wantExit=true;}}
+    }
 int main(void){
     srand((unsigned)time(NULL));gfxInitDefault();C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);C2D_Init(C2D_DEFAULT_MAX_OBJECTS);C2D_Prepare();
     top=C2D_CreateScreenTarget(GFX_TOP,GFX_LEFT);bottom=C2D_CreateScreenTarget(GFX_BOTTOM,GFX_LEFT);
