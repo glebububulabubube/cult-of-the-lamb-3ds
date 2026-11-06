@@ -51,6 +51,11 @@ static float hx,hy;
 // resources: type 0=tree(sapling->grows),1=rock ; x,y world ; growth 0..1
 static float rx[MAX_RES],ry[MAX_RES],rg[MAX_RES];static int rt[MAX_RES],rCnt=0;
 static int rWood=0,rStone=0;
+static int craftOpen=0,craftSel=0;
+// craftable: type in build-term, cost wood, cost stone
+static const int craftType[5]={0,1,2,3,4};
+static const int craftWood[5]={20,12,30,5,50};
+static const int craftStone[5]={0,8,0,5,20};
 static const char* nmAll[]={"ZEB","MORK","LUG","ROK","SYN","BAR","NAT","VEX","KRO","MAL","ZOR","GNA","THU","FEN","ORY","SAL","VUL","IX"};
 static int nmC=18;
 static float rnd(float a,float b){ return a+(float)rand()/(float)RAND_MAX*(b-a); }
@@ -117,6 +122,21 @@ static void updateRes(float dt){
     for(int i=0;i<rCnt;i++){
         if(rt[i]==0 && rg[i]<1.0f) rg[i]+=dt*0.02f; // trees grow slowly
     }
+    // rocks slowly respawn over time
+    static float rockTimer=0;
+    rockTimer+=dt;
+    if(rockTimer>15.0f && rCnt<MAX_RES){
+        rockTimer=0;
+        // find a clear random spot
+        for(int tries=0;tries<10;tries++){
+            float x=80+(float)(rand()%(WORLD_W-160));
+            float y=80+(float)(rand()%(WORLD_H-160));
+            if(hypotf(x-altarX,y-altarY)<90)continue;
+            if(hypotf(x-px,y-py)<60)continue;
+            rx[rCnt]=x;ry[rCnt]=y;rg[rCnt]=1.0f;rt[rCnt]=1;rCnt++;
+            break;
+        }
+    }
 }
 static void chopNear(float x,float y){
     for(int i=0;i<rCnt;i++){
@@ -142,18 +162,36 @@ static void drawRes(float ox,float oy){
     for(int i=0;i<rCnt;i++){
         float x=rx[i]-ox,y=ry[i]-oy;if(x<-40||x>SCR_W+40||y<-40||y>SCR_H+40)continue;
         if(rt[i]==0){
-            // tree: trunk + crown sized by growth
-            float h=6.0f*rg[i]+2.0f;
-            C2D_DrawRectSolid(x-2,y-h,0.4f,4,h,C(0.4f,0.25f,0.1f));
-            if(rg[i]>0.4f){
-                float cr=8.0f*rg[i];
-                C2D_DrawCircleSolid(x,y-h,0.41f,cr,C(0.2f,0.5f,0.2f));
-                C2D_DrawCircleSolid(x,y-h+cr*0.5f,0.42f,cr*0.7f,C(0.25f,0.6f,0.25f));
+            // tree in platformer style: trunk + big leafy crown, 3 growth stages
+            float tr=rnd(10,14)*rg[i];          // trunk height grows
+            if(tr<3)tr=3;
+            // trunk
+            C2D_DrawRectSolid(x-3,y-tr,0.4f,6,tr,C(0.45f,0.3f,0.12f));
+            // crown
+            float cr=12.0f*rg[i]+2.0f;
+            if(rg[i]>0.35f){ // young tree small crown
+                C2D_DrawCircleSolid(x,y-tr-6,0.41f,cr,C(0.15f,0.5f,0.15f));
+                C2D_DrawCircleSolid(x-4,y-tr-3,0.42f,cr*0.6f,C(0.2f,0.6f,0.2f));
+                C2D_DrawCircleSolid(x+4,y-tr-3,0.42f,cr*0.6f,C(0.2f,0.6f,0.2f));
+            }
+            if(rg[i]>0.7f){ // mature: bigger crown, extra top
+                cr=15.0f*rg[i]+2.0f;
+                C2D_DrawCircleSolid(x,y-tr-8,0.41f,cr,C(0.12f,0.55f,0.12f));
+                C2D_DrawCircleSolid(x-6,y-tr-4,0.42f,cr*0.6f,C(0.2f,0.65f,0.2f));
+                C2D_DrawCircleSolid(x+6,y-tr-4,0.42f,cr*0.6f,C(0.2f,0.65f,0.2f));
+                C2D_DrawCircleSolid(x,y-tr-14,0.43f,cr*0.45f,C(0.15f,0.6f,0.15f));
             }
         } else {
-            // rock: grey bump
-            C2D_DrawCircleSolid(x,y,0.4f,9,C(0.5f,0.5f,0.52f));
-            C2D_DrawCircleSolid(x-3,y-3,0.41f,5,C(0.62f,0.62f,0.64f));
+            // rock: layered stone with facets
+            C2D_DrawCircleSolid(x,y+3,0.4f,11,C(0.5f,0.5f,0.53f));
+            C2D_DrawCircleSolid(x,y,0.41f,9,C(0.6f,0.6f,0.63f));
+            C2D_DrawCircleSolid(x-2,y-3,0.42f,6,C(0.72f,0.72f,0.75f));
+            C2D_DrawCircleSolid(x+2,y-1,0.43f,4,C(0.8f,0.8f,0.82f));
+            // cracks
+            C2D_DrawLine(x,y,0.5f,x-4,y+3,C(0.35f,0.35f,0.38f),1.0f,0.45f);
+            C2D_DrawLine(x,y,0.5f,x+3,y-2,C(0.35f,0.35f,0.38f),1.0f,0.45f);
+            // moss speck
+            C2D_DrawCircleSolid(x+4,y+5,0.5f,2,C(0.25f,0.5f,0.25f));
         }
     }
 }
@@ -175,6 +213,22 @@ static void tryBuild(int ty,float x,float y){
     if(ty==4)hasTemple=1;
     score-=cost;
     if(ty==0)addR(x+rnd(-20,20),y+20);
+}
+static void doCraft(int idx){
+    if(idx<0||idx>=5)return;
+    int ty=craftType[idx],w=craftWood[idx],s=craftStone[idx];
+    if(rWood<w||rStone<s){buildFail=90;return;}
+    if(ty==2&&hasKitchen)return;
+    if(ty==4&&hasTemple)return;
+    // place near player
+    float bx2=px+rnd(-20,20),by2=py+rnd(-10,30);
+    if(bx2<40)bx2=40;if(bx2>WORLD_W-40)bx2=WORLD_W-40;
+    if(by2<40)by2=40;if(by2>WORLD_H-40)by2=WORLD_H-40;
+    bx[buildCount]=bx2;by[buildCount]=by2;btype[buildCount]=ty;buildCount++;
+    if(ty==2)hasKitchen=1;
+    if(ty==4)hasTemple=1;
+    rWood-=w;rStone-=s;
+    if(ty==0)addR(bx2+rnd(-20,20),by2+20);
 }
 static void demolish(float wx,float wy){
     int best=-1;float bd=46*46;
@@ -239,7 +293,18 @@ static void bottomGrass(void){
 }
 static void drawBottom(void){
     bottomGrass();
-    if(talkOpen){
+    if(craftOpen){
+        const char* cn[5]={"HOUSE","TOILET","KITCHEN","DECOR","TEMPLE"};
+        for(int i=0;i<5;i++){
+            int y=14+i*44;
+            u32 c=(i==craftSel)?C(0.5f,0.2f,0.1f):C(0.2f,0.3f,0.15f);
+            C2D_DrawRectSolid(20,y,0.3f,280,38,c);
+            char b[40];snprintf(b,40,"%s  W%d S%d",cn[i],craftWood[i],craftStone[i]);
+            text(26,y+6,0.45f,b,0.95f,0.95f,0.95f);
+        }
+        char rm[40];snprintf(rm,40,"Wood:%d Stone:%d",rWood,rStone);text(190,0,0.45f,rm,1,0.8f,0.3f);
+        text(90,226,0.4f,"A=craft B=back",0.8f,0.9f,0.8f);
+    } else if(talkOpen){
         const char* a[4]={"WORK","SCARE","CHEER","READ"};
         for(int i=0;i<4;i++){int y=20+i*50;u32 c=(i==talkSel)?C(0.55f,0.1f,0.15f):C(0.2f,0.4f,0.12f);C2D_DrawRectSolid(20,y-4,0.3f,280,34,c);text(40,y,0.5f,a[i],0.9f,0.9f,0.9f);}
     }else{
@@ -409,9 +474,19 @@ static void update(float dt){
         updateRes(dt);
         u32 down=hidKeysDown();bool acted=false;
         if(down&KEY_X){ chopNear(px,py); chipRock(px,py); }
+        if(down&KEY_Y){ craftOpen=1; craftSel=0; }
         if((down&KEY_A)&&hypotf(WORLD_W/2-px,20-py)<40){hubIn();state=ST_HUB;acted=true;}
         if(!acted&&(down&KEY_A)&&hasTemple){for(int i=0;i<buildCount;i++){if((int)btype[i]==4&&hypotf(bx[i]-px,by[i]-py)<50){tmpIn();state=ST_TMP;acted=true;break;}}}
         if(!acted&&(down&KEY_A)){for(int i=0;i<followCount;i++){if(hypotf(fwX[i]-px,fwY[i]-py)<28){talkTarget=i;talkSel=0;talkOpen=1;state=ST_TALK;break;}}}
+        // craft menu handling
+        if(craftOpen){
+            if(down&KEY_B){craftOpen=0;}
+            if(down&(KEY_DUP|KEY_CPAD_UP))craftSel=(craftSel+4)%5;
+            if(down&(KEY_DDOWN|KEY_CPAD_DOWN))craftSel=(craftSel+1)%5;
+            if(down&KEY_A){doCraft(craftSel);}
+            touchPosition ctp;hidTouchRead(&ctp);static float ccd=0;if(ccd>0)ccd-=dt;
+            if((ctp.px!=0||ctp.py!=0)&&ccd<=0){int row=(ctp.py-40)/40;if(row>=0&&row<5){craftSel=row;doCraft(row);}ccd=0.3f;}
+        }
     }else if(state==ST_HUB){hubUp(dt);}
     else if(state==ST_DUN){dUp(dt);}
     else if(state==ST_TALK){touchPosition tp;hidTouchRead(&tp);u32 down=hidKeysDown();if(down&KEY_B){talkOpen=0;state=ST_PLAY;}if(down&(KEY_DUP|KEY_CPAD_UP))talkSel=(talkSel+3)%4;if(down&(KEY_DDOWN|KEY_CPAD_DOWN))talkSel=(talkSel+1)%4;static float tc=0;if(tc>0)tc-=dt;if((tp.px!=0||tp.py!=0)&&tc<=0){int row=(tp.py-20)/50;if(row>=0&&row<4){talkSel=row;doTalk(row);}tc=0.3f;}if(down&KEY_A)doTalk(talkSel);}
