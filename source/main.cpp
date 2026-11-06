@@ -20,7 +20,7 @@
 #define MAX_RES 24
 #define SV "sdmc:/cultlamb_save.bin"
 static u32 C(float r,float g,float b){ return C2D_Color32((int)(r*255),(int)(g*255),(int)(b*255),255); }
-enum GS{ST_MENU,ST_HUB,ST_PLAY,ST_DUN,ST_TALK,ST_TMP};
+enum GS{ST_MENU,ST_HUB,ST_PLAY,ST_DUN,ST_TALK,ST_TMP,ST_OPT};
 static GS state=ST_MENU;
 static int menuSel=0;
 static float tclock;
@@ -30,6 +30,10 @@ static C2D_Font fnt;
 static C2D_TextBuf tbuf;
 static u32 bg,red,cream,black,white,grey,yellow;
 static float px,py,php,pmaxhp=100.0f,camx,camy;
+static float p2x,p2y; static bool p2Active=false;
+static int coopOn=0;
+static int n3dsOn=0;
+static int optSel=0;
 static float bx[MAX_BUILD],by[MAX_BUILD],btype[MAX_BUILD];
 static int buildCount,hasKitchen,hasTemple;
 static float fwX[MAX_FOLLOW],fwY[MAX_FOLLOW],fwT[MAX_FOLLOW],fwM[MAX_FOLLOW];
@@ -102,8 +106,10 @@ static void addF(float x,float y,const char* n){
 static void addR(float x,float y){ addF(x,y,nmAll[rand()%nmC]); }
 static void spawnResources(void){
     rCnt=0;rWood=0;rStone=0;
-    // trees scattered around world
-    for(int i=0;i<10&&rCnt<MAX_RES;i++){
+    // trees scattered around world (more on N3DS mode)
+    int nTree = n3dsOn?16:10;
+    int nRock = n3dsOn?14:8;
+    for(int i=0;i<nTree&&rCnt<MAX_RES;i++){
         float x=80+(float)(rand()%(WORLD_W-160));
         float y=80+(float)(rand()%(WORLD_H-160));
         // keep away from altar center
@@ -111,7 +117,7 @@ static void spawnResources(void){
         rx[rCnt]=x;ry[rCnt]=y;rg[rCnt]=rnd(0.3f,1.0f);rt[rCnt]=0;rCnt++;
     }
     // rocks
-    for(int i=0;i<8&&rCnt<MAX_RES;i++){
+    for(int i=0;i<nRock&&rCnt<MAX_RES;i++){
         float x=80+(float)(rand()%(WORLD_W-160));
         float y=80+(float)(rand()%(WORLD_H-160));
         if(hypotf(x-altarX,y-altarY)<90)continue;
@@ -198,6 +204,8 @@ static void drawRes(float ox,float oy){
 static void startGame(void){
     score=20;buildCount=0;hasKitchen=0;hasTemple=0;altarX=WORLD_W/2;altarY=WORLD_H/2;
     px=altarX+40;py=altarY;php=pmaxhp;dmgFlash=0;ritualCd=0;buildFail=0;followCount=0;
+    p2Active = (coopOn!=0);
+    if(p2Active){ p2x=px-40; p2y=py+20; }
     addR(altarX-40,altarY+20);addR(altarX+40,altarY+10);addR(altarX,altarY+40);
     camx=px-SCR_W/2;camy=py-SCR_H/2;talkTarget=-1;talkOpen=0;buildSel=0;
     spawnResources();
@@ -237,7 +245,13 @@ static void demolish(float wx,float wy){
     for(int i=best;i<buildCount-1;i++){bx[i]=bx[i+1];by[i]=by[i+1];btype[i]=btype[i+1];}
     buildCount--;
 }
-static void updateCam(void){ camx=px-SCR_W/2;camy=py-SCR_H/2;if(camx<0)camx=0;if(camy<0)camy=0;if(camx>WORLD_W-SCR_W)camx=WORLD_W-SCR_W;if(camy>WORLD_H-SCR_H)camy=WORLD_H-SCR_H; }
+static void updateCam(void){
+    float cx=px,cy=py;
+    if(p2Active){ cx=(px+p2x)*0.5f; cy=(py+p2y)*0.5f; }
+    camx=cx-SCR_W/2;camy=cy-SCR_H/2;
+    if(camx<0)camx=0;if(camy<0)camy=0;
+    if(camx>WORLD_W-SCR_W)camx=WORLD_W-SCR_W;if(camy>WORLD_H-SCR_H)camy=WORLD_H-SCR_H;
+}
 static void drawAlt(float ox,float oy){
     float x=altarX-ox,y=altarY-oy;
     C2D_DrawCircleSolid(x,y,0.2f,16,C(0.45f,0.1f,0.1f));
@@ -279,7 +293,27 @@ static void drawGame(void){
     C2D_TargetClear(top,bg);C2D_SceneBegin(top);
     grass();drawAlt(ox,oy);gate(ox,oy);drawRes(ox,oy);
     for(int i=0;i<buildCount;i++){float x=bx[i]-ox,y=by[i]-oy;if(x<-60||x>SCR_W+60||y<-60||y>SCR_H+60)continue;drawBuild(x,y,(int)btype[i]);}
-    followers(ox,oy);lamb(px-ox,py-oy,1.0f,0);
+    followers(ox,oy);
+    lamb(px-ox,py-oy,1.0f,0);
+    if(p2Active){
+        // second player: slightly different colour for clarity (orange-ish body)
+        float wx=p2x-ox,wy=p2y-oy;
+        C2D_DrawCircleSolid(wx,wy+22*0.9f,0.6f,9*0.9f,C2D_Color32(0,0,0,90));
+        C2D_DrawRectSolid(wx-8*0.9f,wy+12*0.9f,0.3f,4*0.9f,9*0.9f,grey);
+        C2D_DrawRectSolid(wx+4*0.9f,wy+12*0.9f,0.3f,4*0.9f,9*0.9f,grey);
+        C2D_DrawRectSolid(wx-13*0.9f,wy-6*0.9f,0.4f,26*0.9f,20*0.9f,C(0.9f,0.4f,0.1f));
+        for(int i=0;i<5;i++){ float z=wx-12*0.9f+i*6*0.9f; C2D_DrawRectSolid(z,wy+13*0.9f,0.41f,5*0.9f,3*0.9f,(i%2)?white:C(0.9f,0.9f,0.9f)); }
+        C2D_DrawRectSolid(wx-16*0.9f,wy-2*0.9f,0.5f,5*0.9f,8*0.9f,grey);
+        C2D_DrawRectSolid(wx+11*0.9f,wy-2*0.9f,0.5f,5*0.9f,8*0.9f,grey);
+        C2D_DrawCircleSolid(wx,wy+3*0.9f,0.51f,4*0.9f,yellow);
+        C2D_DrawCircleSolid(wx,wy-15*0.9f,0.5f,9*0.9f,grey);
+        C2D_DrawRectSolid(wx-8*0.9f,wy-30*0.9f,0.5f,16*0.9f,8*0.9f,yellow);
+        C2D_DrawRectSolid(wx-8*0.9f,wy-30*0.9f,0.51f,16*0.9f,2*0.9f,white);
+        C2D_DrawRectSolid(wx-9*0.9f,wy-33*0.9f,0.52f,3*0.9f,5*0.9f,black);
+        C2D_DrawRectSolid(wx+6*0.9f,wy-33*0.9f,0.52f,3*0.9f,5*0.9f,black);
+        C2D_DrawCircleSolid(wx,wy-26*0.9f,0.6f,2.5f*0.9f,C(1,0,0));
+        text(wx-8,wy+26,0.4f,"P2",0.4f,0.9f,1.0f);
+    }
     if(dmgFlash>0)C2D_DrawRectSolid(0,0,0.9f,SCR_W,SCR_H,C2D_Color32(255,0,0,50));
     char h[32];snprintf(h,32,"Food:%d Cult:%d",score,followCount);text(8,30,0.5f,h,1,0.85f,0.3f);
     char rh[40];snprintf(rh,40,"Wood:%d Stone:%d",rWood,rStone);text(8,46,0.45f,rh,0.9f,0.8f,0.4f);
@@ -441,7 +475,33 @@ static void mBot(void){
     C2D_TargetClear(bottom,black);C2D_SceneBegin(bottom);C2D_DrawRectSolid(0,0,0,BOT_W,BOT_H,black);
     text(40,6,0.5f,"CULT OF THE LAMB",1,0.2f,0.2f);
     const char* it[4]={"PLAY","NEW GAME","SETTINGS","EXIT"};
-    for(int i=0;i<4;i++){int y=45+i*48;u32 c=(i==menuSel)?C(0.55f,0.1f,0.15f):C(0.18f,0.12f,0.1f);C2D_DrawRectSolid(40,y-4,0.3f,240,30,c);text(60,y-2,0.6f,it[i],0.9f,0.9f,0.9f);}
+    for(int i=0;i<4;i++){
+        int y=45+i*48;u32 c=(i==menuSel)?C(0.55f,0.1f,0.15f):C(0.18f,0.12f,0.1f);
+        C2D_DrawRectSolid(40,y-4,0.3f,240,30,c);
+        text(60,y-2,0.6f,it[i],0.9f,0.9f,0.9f);
+    }
+}
+static void optDraw(void){
+    C2D_TargetClear(top,C(0.3f,0.2f,0.2f));
+    C2D_SceneBegin(top);
+    C2D_DrawRectSolid(0,0,0,SCR_W,SCR_H,C(0.3f,0.2f,0.2f));
+    text(60,20,0.7f,"SETTINGS",1,0.9f,0.3f);
+    // two options
+    const char* names[2]={"COOP","N3DS MODE"};
+    for(int i=0;i<2;i++){
+        int y=80+i*60;
+        u32 c=(i==optSel)?C(0.5f,0.15f,0.1f):C(0.2f,0.2f,0.2f);
+        C2D_DrawRectSolid(40,y-4,0.3f,320,44,c);
+        char b[30];
+        if(i==0)snprintf(b,30,"%s: %s",names[i],coopOn?"ON":"OFF");
+        else snprintf(b,30,"%s: %s",names[i],n3dsOn?"ON":"OFF");
+        text(60,y+6,0.55f,b,0.95f,0.95f,0.95f);
+    }
+    text(40,220,0.4f,"A=on/off B=back",0.8f,0.9f,0.8f);
+    C2D_TargetClear(bottom,C(0.3f,0.2f,0.2f));
+    C2D_SceneBegin(bottom);
+    C2D_DrawRectSolid(0,0,0,BOT_W,BOT_H,C(0.3f,0.2f,0.2f));
+    text(40,90,0.5f,"A=on/off B=back",1,1,1);
 }
 static void save(void){
     FILE* f=fopen(SV,"wb");if(!f)return;int n=followCount;
@@ -465,6 +525,13 @@ static void update(float dt){
         u32 k=hidKeysHeld();float dx=0,dy=0;if(k&KEY_CPAD_UP)dy-=1;if(k&KEY_CPAD_DOWN)dy+=1;if(k&KEY_CPAD_LEFT)dx-=1;if(k&KEY_CPAD_RIGHT)dx+=1;
         float l=sqrtf(dx*dx+dy*dy);if(l>0){dx/=l;dy/=l;}px+=dx*2.6f*60.f*dt;py+=dy*2.6f*60.f*dt;
         if(px<20)px=20;if(px>WORLD_W-20)px=WORLD_W-20;if(py<20)py=20;if(py>WORLD_H-20)py=WORLD_H-20;
+        if(p2Active){
+            float d2x=0,d2y=0;
+            if(k&KEY_DUP)d2y-=1;if(k&KEY_DDOWN)d2y+=1;if(k&KEY_DLEFT)d2x-=1;if(k&KEY_DRIGHT)d2x+=1;
+            float l2=sqrtf(d2x*d2x+d2y*d2y);if(l2>0){d2x/=l2;d2y/=l2;}
+            p2x+=d2x*2.6f*60.f*dt;p2y+=d2y*2.6f*60.f*dt;
+            if(p2x<20)p2x=20;if(p2x>WORLD_W-20)p2x=WORLD_W-20;if(p2y<20)p2y=20;if(p2y>WORLD_H-20)p2y=WORLD_H-20;
+        }
         for(int i=0;i<followCount;i++){fwT[i]+=dt*0.6f;fwX[i]+=cosf(fwT[i])*0.6f;fwY[i]+=sinf(fwT[i]*0.9f)*0.6f;if(fwX[i]<20)fwX[i]=20;if(fwX[i]>WORLD_W-20)fwX[i]=WORLD_W-20;if(fwY[i]<20)fwY[i]=20;if(fwY[i]>WORLD_H-20)fwY[i]=WORLD_H-20;}
         if(ritualCd>0)ritualCd-=dt;if(buildFail>0)buildFail-=dt;
         touchPosition tp;hidTouchRead(&tp);static float tcd=0;if(tcd>0)tcd-=dt;
@@ -474,6 +541,7 @@ static void update(float dt){
         updateRes(dt);
         u32 down=hidKeysDown();bool acted=false;
         if(down&KEY_X){ chopNear(px,py); chipRock(px,py); }
+        if(down&KEY_R && p2Active){ chopNear(p2x,p2y); chipRock(p2x,p2y); }
         if(down&KEY_Y){ craftOpen=1; craftSel=0; }
         if((down&KEY_A)&&hypotf(WORLD_W/2-px,20-py)<40){hubIn();state=ST_HUB;acted=true;}
         if(!acted&&(down&KEY_A)&&hasTemple){for(int i=0;i<buildCount;i++){if((int)btype[i]==4&&hypotf(bx[i]-px,by[i]-py)<50){tmpIn();state=ST_TMP;acted=true;break;}}}
@@ -491,7 +559,17 @@ static void update(float dt){
     else if(state==ST_DUN){dUp(dt);}
     else if(state==ST_TALK){touchPosition tp;hidTouchRead(&tp);u32 down=hidKeysDown();if(down&KEY_B){talkOpen=0;state=ST_PLAY;}if(down&(KEY_DUP|KEY_CPAD_UP))talkSel=(talkSel+3)%4;if(down&(KEY_DDOWN|KEY_CPAD_DOWN))talkSel=(talkSel+1)%4;static float tc=0;if(tc>0)tc-=dt;if((tp.px!=0||tp.py!=0)&&tc<=0){int row=(tp.py-20)/50;if(row>=0&&row<4){talkSel=row;doTalk(row);}tc=0.3f;}if(down&KEY_A)doTalk(talkSel);}
     else if(state==ST_TMP){tmpUp(dt);}
-    else if(state==ST_MENU){touchPosition tp;hidTouchRead(&tp);static float mc=0;if(mc>0)mc-=dt;u32 down=hidKeysDown();if(down&(KEY_DUP|KEY_CPAD_UP))menuSel=(menuSel+3)%4;if(down&(KEY_DDOWN|KEY_CPAD_DOWN))menuSel=(menuSel+1)%4;if((tp.px!=0||tp.py!=0)&&mc<=0){int row=(tp.py-45)/48;if(row>=0&&row<4)menuSel=row;if(row==0){startGame();if(load())state=ST_PLAY;}else if(row==1)newGame();else if(row==3)wantExit=true;mc=0.3f;}if(down&KEY_A){if(menuSel==0){startGame();if(load())state=ST_PLAY;}else if(menuSel==1)newGame();else if(menuSel==3)wantExit=true;}}
+    else if(state==ST_OPT){
+        u32 down=hidKeysDown();
+        if(down&(KEY_DUP|KEY_CPAD_UP))optSel=(optSel+1)%2;
+        if(down&(KEY_DDOWN|KEY_CPAD_DOWN))optSel=(optSel+1)%2;
+        if(down&KEY_A){
+            if(optSel==0)coopOn=(coopOn?0:1);
+            else n3dsOn=(n3dsOn?0:1);
+        }
+        if(down&KEY_B)state=ST_MENU;
+    }
+    else if(state==ST_MENU){touchPosition tp;hidTouchRead(&tp);static float mc=0;if(mc>0)mc-=dt;u32 down=hidKeysDown();if(down&(KEY_DUP|KEY_CPAD_UP))menuSel=(menuSel+3)%4;if(down&(KEY_DDOWN|KEY_CPAD_DOWN))menuSel=(menuSel+1)%4;if((tp.px!=0||tp.py!=0)&&mc<=0){int row=(tp.py-45)/48;if(row>=0&&row<4)menuSel=row;if(row==0){startGame();if(load())state=ST_PLAY;}else if(row==1)newGame();else if(row==2)state=ST_OPT;else if(row==3)wantExit=true;mc=0.3f;}if(down&KEY_A){if(menuSel==0){startGame();if(load())state=ST_PLAY;}else if(menuSel==1)newGame();else if(menuSel==2)state=ST_OPT;else if(menuSel==3)wantExit=true;}}
 }
 int main(void){
     srand((unsigned)time(NULL));gfxInitDefault();C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);C2D_Init(C2D_DEFAULT_MAX_OBJECTS);C2D_Prepare();
@@ -506,6 +584,7 @@ int main(void){
         else if(state==ST_DUN){dDraw();}
         else if(state==ST_TALK){talkTop();drawBottom();}
         else if(state==ST_TMP){tmpDraw();}
+        else if(state==ST_OPT){optDraw();}
         else {mTop();mBot();}
         C3D_FrameEnd(0);
     }
