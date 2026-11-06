@@ -20,9 +20,10 @@
 #define MAX_RES 24
 #define SV "sdmc:/cultlamb_save.bin"
 static u32 C(float r,float g,float b){ return C2D_Color32((int)(r*255),(int)(g*255),(int)(b*255),255); }
-enum GS{ST_MENU,ST_HUB,ST_PLAY,ST_DUN,ST_TALK,ST_TMP,ST_OPT};
+enum GS{ST_MENU,ST_HUB,ST_PLAY,ST_DUN,ST_TALK,ST_TMP,ST_OPT,ST_ARTS};
 static GS state=ST_MENU;
 static int menuSel=0;
+static int artSel=0;
 static float tclock;
 static bool wantExit=false;
 static C3D_RenderTarget *top,*bottom;
@@ -33,6 +34,8 @@ static float px,py,php,pmaxhp=100.0f,camx,camy;
 static float p2x,p2y; static bool p2Active=false;
 static int coopOn=0;
 static int n3dsOn=0;
+static int barbieOn=0;
+static int viewDist=1;
 static int optSel=0;
 static u32 lastKeys=0;
 static float bx[MAX_BUILD],by[MAX_BUILD],btype[MAX_BUILD];
@@ -168,6 +171,10 @@ static void chipRock(float x,float y){
 static void drawRes(float ox,float oy){
     for(int i=0;i<rCnt;i++){
         float x=rx[i]-ox,y=ry[i]-oy;if(x<-40||x>SCR_W+40||y<-40||y>SCR_H+40)continue;
+        // view distance affects how far resources are culled
+        float dist=hypotf(rx[i]-px,ry[i]-py);
+        float maxD=(viewDist==1)?200.0f:(viewDist==2)?340.0f:500.0f;
+        if(dist>maxD)continue;
         if(rt[i]==0){
             // tree in platformer style: trunk + big leafy crown, 3 growth stages
             float tr=rnd(10,14)*rg[i];          // trunk height grows
@@ -276,9 +283,10 @@ static void gate(float ox,float oy){
     text(gx-30,gy+4,0.5f,"ENTER DUNGEONS",0.9f,0.7f,0.6f);
 }
 static void grass(void){
-    C2D_DrawRectSolid(0,0,0,SCR_W,SCR_H,C(0.2f,0.5f,0.15f));
-    for(int i=0;i<60;i++){float gx=(i*37+((int)tclock*10))%(SCR_W+8),gy=(i*53)%SCR_H;C2D_DrawRectSolid(gx,gy,0.2f,2,6,C(0.3f,0.6f,0.2f));}
-    for(int i=0;i<40;i++){float gx=(i*61+20)%(SCR_W+8),gy=(i*71+30)%SCR_H;C2D_DrawCircleSolid(gx,gy,0.2f,2,C(0.5f,0.7f,0.3f));}
+    if(barbieOn){ C2D_DrawRectSolid(0,0,0,SCR_W,SCR_H,C(1.0f,0.55f,0.7f)); }
+    else { C2D_DrawRectSolid(0,0,0,SCR_W,SCR_H,C(0.2f,0.5f,0.15f)); }
+    for(int i=0;i<60;i++){float gx=(i*37+((int)tclock*10))%(SCR_W+8),gy=(i*53)%SCR_H;if(barbieOn)C2D_DrawRectSolid(gx,gy,0.2f,2,6,C(1,0.7f,0.85f));else C2D_DrawRectSolid(gx,gy,0.2f,2,6,C(0.3f,0.6f,0.2f));}
+    for(int i=0;i<40;i++){float gx=(i*61+20)%(SCR_W+8),gy=(i*71+30)%SCR_H;if(barbieOn)C2D_DrawCircleSolid(gx,gy,0.2f,2,C(1,0.8f,0.9f));else C2D_DrawCircleSolid(gx,gy,0.2f,2,C(0.5f,0.7f,0.3f));}
 }
 static void followers(float ox,float oy){
     for(int i=0;i<followCount;i++){
@@ -475,11 +483,11 @@ static void mTop(void){
 static void mBot(void){
     C2D_TargetClear(bottom,black);C2D_SceneBegin(bottom);C2D_DrawRectSolid(0,0,0,BOT_W,BOT_H,black);
     text(40,6,0.5f,"CULT OF THE LAMB",1,0.2f,0.2f);
-    const char* it[4]={"PLAY","NEW GAME","SETTINGS","EXIT"};
-    for(int i=0;i<4;i++){
-        int y=45+i*48;u32 c=(i==menuSel)?C(0.55f,0.1f,0.15f):C(0.18f,0.12f,0.1f);
+    const char* it[5]={"PLAY","NEW GAME","SETTINGS","ARTS","EXIT"};
+    for(int i=0;i<5;i++){
+        int y=38+i*38;u32 c=(i==menuSel)?C(0.55f,0.1f,0.15f):C(0.18f,0.12f,0.1f);
         C2D_DrawRectSolid(40,y-4,0.3f,240,30,c);
-        text(60,y-2,0.6f,it[i],0.9f,0.9f,0.9f);
+        text(60,y-2,0.55f,it[i],0.9f,0.9f,0.9f);
     }
 }
 static void optDraw(void){
@@ -487,22 +495,53 @@ static void optDraw(void){
     C2D_SceneBegin(top);
     C2D_DrawRectSolid(0,0,0,SCR_W,SCR_H,C(0.3f,0.2f,0.2f));
     text(60,20,0.7f,"SETTINGS",1,0.9f,0.3f);
-    // two options
-    const char* names[2]={"COOP","N3DS MODE"};
-    for(int i=0;i<2;i++){
-        int y=80+i*60;
+    // four options
+    const char* names[4]={"COOP","N3DS MODE","BARBIE MODE","VIEW DIST"};
+    for(int i=0;i<4;i++){
+        int y=40+i*46;
         u32 c=(i==optSel)?C(0.5f,0.15f,0.1f):C(0.2f,0.2f,0.2f);
-        C2D_DrawRectSolid(40,y-4,0.3f,320,44,c);
-        char b[30];
-        if(i==0)snprintf(b,30,"%s: %s",names[i],coopOn?"ON":"OFF");
-        else snprintf(b,30,"%s: %s",names[i],n3dsOn?"ON":"OFF");
-        text(60,y+6,0.55f,b,0.95f,0.95f,0.95f);
+        C2D_DrawRectSolid(30,y-4,0.3f,340,36,c);
+        char b[34];
+        if(i==0)snprintf(b,34,"%s: %s",names[i],coopOn?"ON":"OFF");
+        else if(i==1)snprintf(b,34,"%s: %s",names[i],n3dsOn?"ON":"OFF");
+        else if(i==2)snprintf(b,34,"%s: %s",names[i],barbieOn?"ON":"OFF");
+        else snprintf(b,34,"%s: %d",names[i],viewDist);
+        text(44,y+6,0.5f,b,0.95f,0.95f,0.95f);
     }
-    text(40,220,0.4f,"A=on/off B=back",0.8f,0.9f,0.8f);
+    text(40,230,0.4f,"A=cycle B=back",0.8f,0.9f,0.8f);
     C2D_TargetClear(bottom,C(0.3f,0.2f,0.2f));
     C2D_SceneBegin(bottom);
     C2D_DrawRectSolid(0,0,0,BOT_W,BOT_H,C(0.3f,0.2f,0.2f));
-    text(40,90,0.5f,"A=on/off B=back",1,1,1);
+    text(40,90,0.5f,"A=cycle B=back",1,1,1);
+}
+static void artDraw(void){
+    C2D_TargetClear(top,black);C2D_SceneBegin(top);
+    C2D_DrawRectSolid(0,0,0,SCR_W,SCR_H,black);
+    text(110,8,0.6f,"ARTS GALLERY",1,0.8f,0.3f);
+    // three procedural artworks shown side by side, highlight selected
+    for(int i=0;i<3;i++){
+        int x0=20+i*130;
+        u32 border=(i==artSel)?C(1,0.9f,0.2f):C(0.3f,0.3f,0.3f);
+        C2D_DrawRectSolid(x0,40,0.2f,120,120,border);
+        int cx=x0+60,cy=100;
+        if(i==0){ // the lamb (procedural)
+            lamb(cx,cy-10,0.7f,0);
+        } else if(i==1){ // pentagram
+            float R=30;
+            for(int k=0;k<5;k++){float a0=k*1.2566f-1.5708f,a1=(k+2)*1.2566f-1.5708f;C2D_DrawLine(cx+cosf(a0)*R,cy+sinf(a0)*R,C(0.9f,0.15f,0.15f),cx+cosf(a1)*R,cy+sinf(a1)*R,C(0.9f,0.15f,0.15f),2,0.5f);}
+        } else { // cult banner: eye in triangle
+            C2D_DrawTriangle(cx,cy-26,C(0.8f,0.1f,0.1f),cx-24,cy+26,C(0.8f,0.1f,0.1f),cx+24,cy+26,C(0.8f,0.1f,0.1f),0.5f);
+            C2D_DrawCircleSolid(cx,cy,0.6f,10,white);
+            C2D_DrawCircleSolid(cx,cy,0.61f,6,black);
+            C2D_DrawCircleSolid(cx,cy,0.62f,3,red);
+        }
+    }
+    const char* t[3]={"THE LAMB","PENTAGRAM","THE EYE"};
+    text(50,170,0.5f,t[artSel],1,1,1);
+    text(40,220,0.4f,"L/R: next   B: back",0.7f,0.8f,0.7f);
+    C2D_TargetClear(bottom,black);C2D_SceneBegin(bottom);
+    C2D_DrawRectSolid(0,0,0,BOT_W,BOT_H,black);
+    text(40,90,0.5f,"L/R: next pic",1,1,1);text(40,130,0.5f,"B: back",1,1,1);
 }
 static void save(void){
     FILE* f=fopen(SV,"wb");if(!f)return;int n=followCount;
@@ -564,15 +603,24 @@ static void update(float dt){
     else if(state==ST_TALK){touchPosition tp;hidTouchRead(&tp);u32 down=hidKeysDown();if(down&KEY_B){talkOpen=0;state=ST_PLAY;}if(down&(KEY_DUP|KEY_CPAD_UP))talkSel=(talkSel+3)%4;if(down&(KEY_DDOWN|KEY_CPAD_DOWN))talkSel=(talkSel+1)%4;static float tc=0;if(tc>0)tc-=dt;if((tp.px!=0||tp.py!=0)&&tc<=0){int row=(tp.py-20)/50;if(row>=0&&row<4){talkSel=row;doTalk(row);}tc=0.3f;}if(down&KEY_A)doTalk(talkSel);}
     else if(state==ST_TMP){tmpUp(dt);}
     else if(state==ST_OPT){
-        if(fresh&(KEY_DUP|KEY_CPAD_UP))optSel=(optSel+1)%2;
-        if(fresh&(KEY_DDOWN|KEY_CPAD_DOWN))optSel=(optSel+1)%2;
+        if(fresh&(KEY_DUP|KEY_CPAD_UP))optSel=(optSel+3)%4;
+        if(fresh&(KEY_DDOWN|KEY_CPAD_DOWN))optSel=(optSel+1)%4;
         if(fresh&KEY_A){
             if(optSel==0)coopOn=(coopOn?0:1);
-            else n3dsOn=(n3dsOn?0:1);
+            else if(optSel==1)n3dsOn=(n3dsOn?0:1);
+            else if(optSel==2)barbieOn=(barbieOn?0:1);
+            else if(optSel==3){ viewDist++; if(viewDist>3)viewDist=1; }
         }
         if(fresh&KEY_B)state=ST_MENU;
     }
-else if(state==ST_MENU){touchPosition tp;hidTouchRead(&tp);static float mc=0;if(mc>0)mc-=dt;if(fresh&(KEY_DUP|KEY_CPAD_UP))menuSel=(menuSel+3)%4;if(fresh&(KEY_DDOWN|KEY_CPAD_DOWN))menuSel=(menuSel+1)%4;if((tp.px!=0||tp.py!=0)&&mc<=0){int row=(tp.py-45)/48;if(row>=0&&row<4)menuSel=row;if(row==0){startGame();if(load())state=ST_PLAY;}else if(row==1)newGame();else if(row==2)state=ST_OPT;else if(row==3)wantExit=true;mc=0.3f;}if(fresh&KEY_A){if(menuSel==0){startGame();if(load())state=ST_PLAY;}else if(menuSel==1)newGame();else if(menuSel==2)state=ST_OPT;else if(menuSel==3)wantExit=true;}}
+else if(state==ST_ARTS){
+        if(fresh&KEY_B)state=ST_MENU;
+        if(fresh&(KEY_DLEFT|KEY_CPAD_LEFT))artSel=(artSel+2)%3; // gallery of 3
+        if(fresh&(KEY_DRIGHT|KEY_CPAD_RIGHT))artSel=(artSel+1)%3;
+        touchPosition tp;hidTouchRead(&tp);static float ac=0;if(ac>0)ac-=dt;
+        if((tp.px!=0||tp.py!=0)&&ac<=0){int col=(tp.px<160)?0:(tp.px<320?1:2);artSel=col;ac=0.1f;}
+    }
+    else if(state==ST_MENU){touchPosition tp;hidTouchRead(&tp);static float mc=0;if(mc>0)mc-=dt;if(fresh&(KEY_DUP|KEY_CPAD_UP))menuSel=(menuSel+4)%5;if(fresh&(KEY_DDOWN|KEY_CPAD_DOWN))menuSel=(menuSel+1)%5;if((tp.px!=0||tp.py!=0)&&mc<=0){int row=(tp.py-38)/38;if(row>=0&&row<5)menuSel=row;if(row==0){startGame();if(load())state=ST_PLAY;}else if(row==1)newGame();else if(row==2)state=ST_OPT;else if(row==3){artSel=0;state=ST_ARTS;}else if(row==4)wantExit=true;mc=0.3f;}if(fresh&KEY_A){if(menuSel==0){startGame();if(load())state=ST_PLAY;}else if(menuSel==1)newGame();else if(menuSel==2)state=ST_OPT;else if(menuSel==3){artSel=0;state=ST_ARTS;}else if(menuSel==4)wantExit=true;}}
     }
 int main(void){
     srand((unsigned)time(NULL));gfxInitDefault();C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);C2D_Init(C2D_DEFAULT_MAX_OBJECTS);C2D_Prepare();
@@ -588,6 +636,7 @@ int main(void){
         else if(state==ST_TALK){talkTop();drawBottom();}
         else if(state==ST_TMP){tmpDraw();}
         else if(state==ST_OPT){optDraw();}
+        else if(state==ST_ARTS){artDraw();}
         else {mTop();mBot();}
         C3D_FrameEnd(0);
     }
